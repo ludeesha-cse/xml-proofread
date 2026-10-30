@@ -1,0 +1,17 @@
+[project]
+name = "proofread"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Ludeesha Nanayakkara", email = "119842558+ludeesha-cse@users.noreply.github.com" }
+]
+requires-python = ">=3.12.6"
+dependencies = []
+
+[project.scripts]
+proofread = "proofread:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
