@@ -1,13 +1,23 @@
 [project]
 name = "proofread"
 version = "0.1.0"
-description = "Add your description here"
+description = "this is a command‑line application that uses a GenAI model to proofread <p> elements in XML files, inject error annotations, and guarantee strict text‑length invariants."
 readme = "README.md"
 authors = [
-    { name = "Ludeesha Nanayakkara", email = "119842558+ludeesha-cse@users.noreply.github.com" }
+    { name = "Ludeesha Nanayakkara", email = "ludeeshananayakkara@gmail.com" }
 ]
-requires-python = ">=3.12.6"
-dependencies = []
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "langchain>=0.3.0",
+    "langchain-google-genai>=2.0.0",
+    "langchain-ollama>=0.2.0",
+    "langcodes>=3.3.0",
+    "language-data>=1.2.0",
+    "lxml>=5.0.0",
+    "python-dotenv>=1.0.1",
+    "typer>=0.12.0",
+]
 
 [project.scripts]
 proofread = "proofread:main"
@@ -15,3 +25,24 @@ proofread = "proofread:main"
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# E: pycodestyle errors, F: Pyflakes, I: isort (import order)
+# UP: pyupgrade (modern syntax), B: flake8-bugbear, SIM: flake8-simplify
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "live: tests that call a real model"
+]
+addopts = "-m 'not live'"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+]
