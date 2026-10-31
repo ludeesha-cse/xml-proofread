@@ -25,6 +25,15 @@ def clean_env(monkeypatch, tmp_path):
     monkeypatch.setenv("GOOGLE_API_KEY", "dummy-key-for-tests")
 
 
+@pytest.fixture(autouse=True)
+def no_real_llm(monkeypatch, fake_llm):
+    """Replace the real model with a fake one that finds no errors."""
+    monkeypatch.setattr("proofread.pipeline.create_chat_model", lambda settings: None)
+    monkeypatch.setattr(
+        "proofread.pipeline.build_structured_llm", lambda model, settings: fake_llm({})
+    )
+
+
 def test_version():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
@@ -64,7 +73,7 @@ SAMPLES = Path(__file__).parent.parent / "samples"
 
 
 def test_run_writes_identical_copy(tmp_path):
-    # no proofreading yet, hence output equal the input (bytes).
+    # The fake model finds no errors, so the output must equal the input byte for byte.
     src = tmp_path / "input.xml"
     src.write_bytes((SAMPLES / "input.xml").read_bytes())
     result = runner.invoke(app, [str(src)])

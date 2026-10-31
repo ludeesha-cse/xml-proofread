@@ -16,9 +16,9 @@ from proofread.exceptions import ConfigError, InputFileError
 logger = logging.getLogger(__name__)
 
 # The model is written as "provider:model_name".
-#   Cloud: google_genai:gemini-3.6-flash
+#   Cloud: google_genai:gemini-3.5-flash-lite
 #   Local: ollama:qwen3:8b
-DEFAULT_MODEL = "google_genai:gemini-3.6-flash"
+DEFAULT_MODEL = "google_genai:gemini-3.5-flash-lite"
 MODEL_ENV_VAR = "PROOFREAD_MODEL"  # lets .env choose the model without a flag
 
 OUTPUT_SUFFIX = ".corrected.xml"
