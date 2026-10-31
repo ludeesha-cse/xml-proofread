@@ -37,6 +37,7 @@ PROVIDER_API_KEYS: dict[str, tuple[str, ...]] = {
 _LANG_HINT = "Use a BCP-47 tag such as 'en', 'en-GB' or 'fr'."
 
 
+# Immutable Value Object / Parameter Object.
 @dataclass(frozen=True)  # frozen = cannot be changed after it is created
 class Settings:
     """Everything one run needs. Created only by build_settings()."""
@@ -133,6 +134,7 @@ def build_settings(
     strict: bool,
 ) -> Settings:
     """Check raw CLI values and return a Settings object, or raise a ProofreadError."""
+    # Factory + Fail-Fast validation.
     # 1. The input file must exist and be a file (not a folder).
     if not input_path.exists():
         raise InputFileError(f"Input file not found: {input_path}")

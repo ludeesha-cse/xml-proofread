@@ -21,6 +21,7 @@ app = typer.Typer(
 )
 
 
+# Pattern: Callback (Observer-like hook). Typer calls this when --version is parsed.
 def _version_callback(value: bool) -> None:
     """Runs as soon as --version is seen: print the version and stop."""
     if value:
@@ -28,6 +29,9 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+# Pattern: Command (registered via decorator). This function is also the Composition Root:
+# it wires config -> settings -> pipeline and is the only layer that knows about the CLI.
+# It is a thin adapter; the real work lives in pipeline.run().
 @app.command()
 def run(
     # Annotated[type, typer.Argument/Option(...)] = default
@@ -97,6 +101,8 @@ def run(
         # parse XML -> proofread -> inject -> write.
         run_pipeline(settings)
 
+    # Pattern: Error Boundary. All exceptions are handled here, most specific first, and mapped
+    # to exit codes. ProofreadError uses polymorphism: exc.exit_code differs per subclass.
     except ProofreadError as exc:
         # Expected problem (the user can fix it): short message, specific exit code.
         logger.error("%s", exc)
