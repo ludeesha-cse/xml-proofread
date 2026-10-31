@@ -4,11 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from proofread.exceptions import InputFileError
-from proofread.xml_io import load_xml
-
 from proofread.exceptions import InputFileError, OutputFileError
-from proofread.xml_io import load_xml, save_xml
+from proofread.xml_io import find_paragraphs, load_xml, save_xml
+
 
 def write(tmp_path: Path, content: bytes, name: str = "in.xml") -> Path:
     path = tmp_path / name
@@ -94,3 +92,47 @@ def test_save_leaves_no_temp_files(tmp_path):
     src = write(tmp_path, b"<r/>")
     save_xml(load_xml(src), tmp_path / "out.xml")
     assert sorted(p.name for p in tmp_path.iterdir()) == ["in.xml", "out.xml"]
+
+# --- finding <p> ----------------------------------------------------------------
+
+
+def paragraphs_of(tmp_path, content: bytes) -> list[str]:
+    """Load content and return the id attribute of each <p> found, in order."""
+    doc = load_xml(write(tmp_path, content))
+    return [p.get("id") for p in find_paragraphs(doc.root)]
+
+
+def test_find_in_document_order(tmp_path):
+    xml = b'<r><p id="1"/><div><p id="2"/></div><p id="3"/></r>'
+    assert paragraphs_of(tmp_path, xml) == ["1", "2", "3"]
+
+
+def test_find_nested_paragraphs(tmp_path):
+    # The outer <p> comes first, then the one inside it.
+    xml = b'<r><p id="outer">a <p id="inner">b</p> c</p></r>'
+    assert paragraphs_of(tmp_path, xml) == ["outer", "inner"]
+
+
+def test_find_paragraphs_in_any_namespace(tmp_path):
+    xml = b'<r xmlns="http://x" xmlns:h="http://h"><p id="1"/><h:p id="2"/></r>'
+    assert paragraphs_of(tmp_path, xml) == ["1", "2"]
+
+
+def test_find_ignores_similar_names(tmp_path):
+    xml = b'<r><para id="no"/><pre id="no"/><!-- <p>not a tag</p> --><p id="yes"/></r>'
+    assert paragraphs_of(tmp_path, xml) == ["yes"]
+
+
+def test_find_when_root_is_p(tmp_path):
+    assert paragraphs_of(tmp_path, b'<p id="root">x</p>') == ["root"]
+
+
+def test_find_none(tmp_path):
+    assert paragraphs_of(tmp_path, b"<r><a/></r>") == []
+
+
+def test_find_in_assignment_sample():
+    doc = load_xml(SAMPLES / "input.xml")
+    paragraphs = find_paragraphs(doc.root)
+    assert len(paragraphs) == 5
+    assert paragraphs[0].text == "For breakfast I like eggs toast and juice."

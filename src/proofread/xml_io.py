@@ -115,3 +115,11 @@ def save_xml(doc: XmlDocument, path: Path) -> None:
 
     logger.debug("Wrote %s (%d bytes)", path, len(data))
 
+def find_paragraphs(root: etree._Element) -> list[etree._Element]:
+    """Return every <p> element in document order, including nested ones.
+
+    "{*}p" matches <p> in any namespace or none, so <p>, <h:p> and XHTML's
+    <p xmlns="http://www.w3.org/1999/xhtml"> are all found. iter() walks the tree
+    depth-first, which is the order the tags appear in the file.
+    """
+    return list(root.iter("{*}p"))
