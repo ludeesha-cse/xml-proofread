@@ -10,8 +10,10 @@ are not kept by lxml, so we save them ourselves and put them back when writing:
 
 import io
 import logging
+import os
 import re
 from dataclasses import dataclass
+import tempfile
 
 from lxml import etree
 
@@ -79,3 +81,37 @@ def load_xml(path: Path) -> XmlDocument:
         doc.newline,
     )
     return doc
+
+def serialize(doc: XmlDocument) -> bytes:
+    """Turn the tree back into bytes, restoring the details lxml dropped."""
+    body = etree.tostring(doc.tree, encoding=doc.encoding, xml_declaration=False)
+    if doc.newline == b"\r\n":
+        # The parser turned every "\r\n" into "\n"; turn them back.
+        body = body.replace(b"\n", b"\r\n")
+    return doc.header + body + doc.footer
+
+def save_xml(doc: XmlDocument, path: Path) -> None:
+    """Write the document to `path` atomically.
+
+    We write to a temporary file in the same folder, then rename it over the target.
+    A crash halfway through can never leave a half-written output file behind.
+    """
+    data = serialize(doc)
+    if path.exists():
+        logger.info("Overwriting existing file %s", path)
+
+    tmp_name = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False
+        ) as tmp:
+            tmp_name = tmp.name
+            tmp.write(data)
+        os.replace(tmp_name, path)
+    except OSError as exc:
+        if tmp_name and os.path.exists(tmp_name):
+            os.remove(tmp_name)
+        raise OutputFileError(f"Cannot write {path}: {exc.strerror or exc}") from exc
+
+    logger.debug("Wrote %s (%d bytes)", path, len(data))
+
