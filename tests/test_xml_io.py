@@ -41,6 +41,7 @@ def test_load_missing_file(tmp_path):
     with pytest.raises(InputFileError, match="Cannot read"):
         load_xml(tmp_path / "missing.xml")
 
+
 # --- round trip ---------------------------------------------------------------
 
 SAMPLES = Path(__file__).parent.parent / "samples"
@@ -92,6 +93,7 @@ def test_save_leaves_no_temp_files(tmp_path):
     src = write(tmp_path, b"<r/>")
     save_xml(load_xml(src), tmp_path / "out.xml")
     assert sorted(p.name for p in tmp_path.iterdir()) == ["in.xml", "out.xml"]
+
 
 # --- finding <p> ----------------------------------------------------------------
 

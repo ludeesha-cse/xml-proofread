@@ -12,13 +12,13 @@ import io
 import logging
 import os
 import re
-from dataclasses import dataclass
 import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 
 from lxml import etree
 
 from proofread.exceptions import InputFileError, OutputFileError
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +42,18 @@ class XmlDocument:
     def root(self) -> etree._Element:
         return self.tree.getroot()
 
+
 def _make_parser() -> etree.XMLParser:
     """An lxml parser that keeps everything and is safe against hostile files."""
     return etree.XMLParser(
-        strip_cdata=False, 
+        strip_cdata=False,
         remove_blank_text=False,  # keep whitespace between tags (indentation)
         remove_comments=False,
         remove_pis=False,  # keep processing instructions like <?pi ...?>
         resolve_entities=False,  # don't expand entities (blocks XXE attacks, keeps &custom;)
-        no_network=True, 
+        no_network=True,
     )
+
 
 def load_xml(path: Path) -> XmlDocument:
     """Read and parse an XML file. Raises InputFileError with a clear message."""
@@ -82,6 +84,7 @@ def load_xml(path: Path) -> XmlDocument:
     )
     return doc
 
+
 def serialize(doc: XmlDocument) -> bytes:
     """Turn the tree back into bytes, restoring the details lxml dropped."""
     body = etree.tostring(doc.tree, encoding=doc.encoding, xml_declaration=False)
@@ -89,6 +92,7 @@ def serialize(doc: XmlDocument) -> bytes:
         # The parser turned every "\r\n" into "\n"; turn them back.
         body = body.replace(b"\n", b"\r\n")
     return doc.header + body + doc.footer
+
 
 def save_xml(doc: XmlDocument, path: Path) -> None:
     """Write the document to `path` atomically.
@@ -114,6 +118,7 @@ def save_xml(doc: XmlDocument, path: Path) -> None:
         raise OutputFileError(f"Cannot write {path}: {exc.strerror or exc}") from exc
 
     logger.debug("Wrote %s (%d bytes)", path, len(data))
+
 
 def find_paragraphs(root: etree._Element) -> list[etree._Element]:
     """Return every <p> element in document order, including nested ones.
