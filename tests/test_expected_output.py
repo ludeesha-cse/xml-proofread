@@ -1,7 +1,7 @@
 """End-to-end check without an LLM: hand-written answers must reproduce the
 assignment's expected output byte for byte.
 
-FAKE_ANSWERS is what we expect a good model to return in Phase 3: for each <p>, a list
+FAKE_ANSWERS is what we expect a good model to return yet: for each <p>, a list
 of (first token, last token, type, correction). Token numbers come from tokenize().
 """
 

@@ -8,6 +8,7 @@ from typing import Literal, get_args
 ErrorType = Literal["grammar", "spelling", "punctuation", "capitalization", "clarity"]
 ERROR_TYPES: tuple[str, ...] = get_args(ErrorType)
 
+
 @dataclass(frozen=True)
 class ErrorSpan:
     """One mistake in a paragraph's text.
