@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<section orientation="portrait">
+    <section-number class="section">1.1</section-number>
+    <section-heading class="heading_1" id="po-heading-id_8zVhkRmG2UmRtdw-29DEnA">Proofread XML</section-heading>
+    <p id="id-1">For breakfast<error type="punctuation" correction=", "> </error>I like eggs<error type="punctuation" correction=", "> </error>toast<error type="punctuation" correction=", and"> and</error> juice.</p>
+    <p id="id-9">The <error type="punctuation" correction="company's">companys</error> employees work hard<error type="punctuation" correction=", "> </error>but <error type="grammar" correction="they're">their</error> unhappy.</p>
+    <p id="id-14">They always eat dinner together at home.</p>
+    <p><error type="capitalization" correction="Sarah">sarah</error> lives in <error type="capitalization" correction="Paris, France">paris france</error><error type="punctuation" correction=".">?</error> She <error type="grammar" correction="enjoys">enjoy</error> french food.</p>
+    <p id="id-20"><error type="capitalization" correction="I">i</error> visited <error type="capitalization" correction="London">london</error> last summer and <error type="capitalization" correction="I">i</error> loved the museums<error type="punctuation" correction=", "> </error>the galleries<error type="punctuation" correction=", "> </error>and the food.</p>
+</section>
