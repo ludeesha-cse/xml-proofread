@@ -5,6 +5,7 @@ from dataclasses import dataclass
 # The five error categories
 ERROR_TYPES = ("grammar", "spelling", "punctuation", "capitalization", "clarity")
 
+
 @dataclass(frozen=True)
 class ErrorSpan:
     """One mistake in a paragraph's text.

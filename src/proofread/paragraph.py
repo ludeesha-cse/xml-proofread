@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from lxml import etree
 
+
 # encapsulated: read-only computed property
 @dataclass(frozen=True)
 class TextSlot:
@@ -31,3 +32,37 @@ class TextSlot:
 def is_paragraph(el: etree._Element) -> bool:
     """True for <p> in any namespace. Comments and PIs have a non-string tag."""
     return isinstance(el.tag, str) and etree.QName(el).localname == "p"
+
+
+def text_slots(p: etree._Element) -> list[TextSlot]:
+    """List the non-empty text slots of a <p>, in reading order.
+
+    Included: the <p>'s own text, and the text inside inline children such as <b>.
+    Excluded: the content of comments, processing instructions, entities and nested
+    <p> elements (because nested <p> is proofread on its own). The text *after* them (their
+    tail) still belongs to this paragraph.
+    """
+    slots: list[TextSlot] = []
+    position = 0
+
+    def add(owner: etree._Element, attr: str) -> None:
+        nonlocal position  # lets this inner function update the outer variable
+        value = getattr(owner, attr) or ""
+        if value:
+            slots.append(TextSlot(owner, attr, position, position + len(value)))
+            position += len(value)
+
+    def walk(el: etree._Element) -> None:
+        add(el, "text")
+        for child in el:
+            if isinstance(child.tag, str) and not is_paragraph(child):
+                walk(child)  # inline element like <b>: its text is part of the sentence
+            add(child, "tail")
+
+    walk(p)
+    return slots
+
+
+def paragraph_text(p: etree._Element) -> str:
+    """The paragraph's text exactly as a reader sees it, without any tags."""
+    return "".join(slot.value for slot in text_slots(p))

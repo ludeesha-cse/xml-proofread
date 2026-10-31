@@ -13,6 +13,7 @@ from proofread.xml_io import find_paragraphs, load_xml, save_xml
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class RunResult:
     """What happened during one run. Grows in later phases (errors found, timings)."""
