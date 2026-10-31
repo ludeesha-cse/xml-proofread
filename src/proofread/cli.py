@@ -69,7 +69,7 @@ def run(
     """Proofread INPUT_PATH and write the annotated copy next to it."""
     setup_logging(verbose)
 
-    # Read .env from the folder the command is run in. 
+    # Read .env from the folder the command is run in.
     # override=False -> variables already set in the shell win over the .env file.
     load_dotenv(find_dotenv(usecwd=True), override=False)
 

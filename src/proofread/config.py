@@ -47,9 +47,9 @@ class Settings:
     language_name: str  # e.g. "English (United Kingdom), formal/readable for prompts"
     provider: str  # e.g. "ollama"
     model_name: str  # e.g. "qwen3:8b"
-    batch_size: int  # <p> tags per LLM request 
+    batch_size: int  # <p> tags per LLM request
     concurrency: int  # LLM requests running at the same time
-    max_retries: int 
+    max_retries: int
     timeout_s: float  # seconds before one request gives up
     strict: bool  # does we fail the whole run if any paragraph fails
 
