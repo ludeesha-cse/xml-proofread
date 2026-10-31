@@ -66,3 +66,13 @@ def text_slots(p: etree._Element) -> list[TextSlot]:
 def paragraph_text(p: etree._Element) -> str:
     """The paragraph's text exactly as a reader sees it, without any tags."""
     return "".join(slot.value for slot in text_slots(p))
+
+
+def contains_cdata(p: etree._Element) -> bool:
+    """True if the paragraph contains a CDATA section.
+
+    lxml merges CDATA into normal text, so editing such a paragraph would silently
+    turn <![CDATA[a<b]]> into a&lt;b. Tags also can't go inside CDATA at all, so these
+    paragraphs are left unchanged.
+    """
+    return b"<![CDATA[" in etree.tostring(p, with_tail=False)

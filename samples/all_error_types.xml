@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document xmlns:meta="http://example.com/meta" version="2.1">
+    <!--
+      Test document for the XML proofreader.
+      Covers the five error types (grammar, spelling, punctuation, capitalization, clarity)
+      and the XML structures the tool must preserve. The comment above each <p> lists the
+      errors a good model should find. Paragraphs marked "no errors" must come out unchanged.
+    -->
+    <meta:info author="QA Team" created="2026-10-31"/>
+    <title>Proofreader Test Cases</title>
+
+    <section id="s1" title="One error type per paragraph">
+        <!-- grammar: "go" -> "goes", "was" -> "were", "their" -> "there" -->
+        <p id="grammar">He go to the gym every morning. The results was better than expected, and their is no reason to stop.</p>
+
+        <!-- spelling: "recieved", "seperate", "definately", "accomodate" -->
+        <p id="spelling">We recieved two seperate offers, and we will definately accomodate both teams.</p>
+
+        <!-- punctuation: missing commas in the list, "its" -> "it's", "?" -> "." at the end -->
+        <p id="punctuation">Please bring a pen paper and a calculator because its going to be a long exam?</p>
+
+        <!-- capitalization: "monday", "john", "i", "new york", "english" -->
+        <p id="capitalization">On monday john and i flew to new york to attend an english literature conference.</p>
+
+        <!-- clarity: dangling modifier (the rain was not walking), repeated word "to to" -->
+        <p id="clarity">Walking to the office, the rain soaked my jacket, so I had to to change before the meeting.</p>
+    </section>
+
+    <section id="s2" title="Mixed and edge cases">
+        <!-- several types in one sentence: "sarah" (capitalization), "dont" (punctuation),
+             "beleive" (spelling), "are" -> "is" (grammar) -->
+        <p id="mixed">sarah dont beleive that the list of tasks are complete.</p>
+
+        <!-- no errors: must be byte-identical in the output -->
+        <p id="clean">The quarterly report was submitted on time and approved by the board.</p>
+
+        <!-- inline markup: "importent" is inside <b>, "Thier" is inside <i>, "everyone" needs
+             a comma after "Hello". Errors must stay inside one tag. -->
+        <p id="inline">Hello everyone this is an <b>importent</b> update. <i>Thier</i> feedback was useful.</p>
+
+        <!-- attributes and escaped characters: "Smith &amp; Sons" must survive; "recieve" (spelling) -->
+        <p id="entities" class="note" data-priority="high">Smith &amp; Sons will recieve the invoice for items under &lt;50 units.</p>
+
+        <!-- comment inside the paragraph: "teh" (spelling) is after the comment -->
+        <p id="inner-comment">This sentence has a comment<!-- reviewer note --> inside teh paragraph.</p>
+
+        <!-- nested <p>: each is proofread on its own.
+             outer: "there" -> "their"; inner: "wich" -> "which" -->
+        <p id="outer">Students must submit there projects.<p id="inner">The deadline wich was extended is Friday.</p> Late work is not accepted.</p>
+
+        <!-- prefixed namespace: "Teh" (spelling), "summery" -> "summary" (spelling) -->
+        <meta:p id="namespaced">Teh summery is attached below.</meta:p>
+
+        <!-- CDATA: left unchanged by design (tags cannot go inside CDATA) -->
+        <p id="cdata"><![CDATA[Use x < y && y > z in teh formula.]]></p>
+
+        <!-- empty paragraphs: nothing to proofread -->
+        <p id="empty"/>
+        <p id="whitespace">   </p>
+    </section>
+
+    <section id="s3" title="Realistic length (about 50 words)">
+        <!-- grammar: "have" -> "has", "affect" -> "effect"; spelling: "enviroment", "goverment";
+             punctuation: missing comma after "However"; capitalization: "european union" -->
+        <p id="long">The committee have reviewed the proposal carefully. However the long-term affect on the local enviroment remains unclear, and the goverment has asked for more data. Representatives from the european union will visit next month to discuss funding, timelines and the steps needed before construction can begin.</p>
+    </section>
+</document>

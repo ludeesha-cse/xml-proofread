@@ -138,3 +138,13 @@ def test_find_in_assignment_sample():
     paragraphs = find_paragraphs(doc.root)
     assert len(paragraphs) == 5
     assert paragraphs[0].text == "For breakfast I like eggs toast and juice."
+
+
+def test_top_level_comments_are_kept_but_whitespace_around_them_may_change(tmp_path):
+    # Known limitation: lxml drops whitespace between nodes outside the root element.
+    content = b"<!-- before -->\n<r><p>a</p></r>\n<!-- after -->"
+    out = tmp_path / "out.xml"
+    save_xml(load_xml(write(tmp_path, content)), out)
+    result = out.read_bytes()
+    assert b"<!-- before -->" in result and b"<!-- after -->" in result  # comments kept
+    assert b"<r><p>a</p></r>" in result  # content inside the root unchanged

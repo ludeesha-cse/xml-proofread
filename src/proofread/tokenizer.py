@@ -1,5 +1,4 @@
-"""Split a paragraph's text into numbered tokens
-"""
+"""Split a paragraph's text into numbered tokens"""
 
 import re
 from dataclasses import dataclass

@@ -2,7 +2,7 @@
 
 from lxml import etree
 
-from proofread.paragraph import paragraph_text, text_slots
+from proofread.paragraph import contains_cdata, paragraph_text, text_slots
 
 PARSER = etree.XMLParser(strip_cdata=False, resolve_entities=False)
 
@@ -54,3 +54,8 @@ def test_empty_paragraph_has_no_slots():
 def test_text_after_the_paragraph_is_not_included():
     p = first_p("<r><p>inside</p> outside</r>")
     assert paragraph_text(p) == "inside"
+
+
+def test_contains_cdata():
+    assert contains_cdata(first_p("<r><p>x <![CDATA[a < b]]> y</p></r>"))
+    assert not contains_cdata(first_p("<r><p>x &lt; y</p></r>"))
