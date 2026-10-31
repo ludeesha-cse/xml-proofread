@@ -93,8 +93,8 @@ def run(
         logger.info("Model:    %s", settings.model)
         logger.debug("Settings: %s", settings)
 
-        # Later phases plug in here: parse XML -> proofread -> inject -> write.
-        logger.warning("Proofreading pipeline is not implemented yet (Phase 0).")
+        # TODO: parse XML -> proofread -> inject -> write.
+        logger.warning("Proofreading pipeline is not implemented yet")
 
     except ProofreadError as exc:
         # Expected problem (the user can fix it): short message, specific exit code.
