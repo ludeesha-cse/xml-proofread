@@ -11,6 +11,7 @@ from proofread import __version__
 from proofread.config import DEFAULT_MODEL, MODEL_ENV_VAR, build_settings, require_api_key
 from proofread.exceptions import ProofreadError
 from proofread.logging_setup import setup_logging
+from proofread.pipeline import run as run_pipeline
 
 logger = logging.getLogger("proofread")
 
@@ -93,8 +94,8 @@ def run(
         logger.info("Model:    %s", settings.model)
         logger.debug("Settings: %s", settings)
 
-        # TODO: parse XML -> proofread -> inject -> write.
-        logger.warning("Proofreading pipeline is not implemented yet")
+        # parse XML -> proofread -> inject -> write.
+        run_pipeline(settings)
 
     except ProofreadError as exc:
         # Expected problem (the user can fix it): short message, specific exit code.

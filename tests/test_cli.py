@@ -58,3 +58,23 @@ def test_missing_api_key(xml_file, monkeypatch):
     monkeypatch.delenv("GOOGLE_API_KEY")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     assert runner.invoke(app, [str(xml_file)]).exit_code == 2
+
+
+SAMPLES = Path(__file__).parent.parent / "samples"
+
+
+def test_run_writes_identical_copy(tmp_path):
+    # no proofreading yet, hence output equal the input (bytes).
+    src = tmp_path / "input.xml"
+    src.write_bytes((SAMPLES / "input.xml").read_bytes())
+    result = runner.invoke(app, [str(src)])
+    assert result.exit_code == 0
+    out = tmp_path / "input.corrected.xml"
+    assert out.read_bytes() == src.read_bytes()
+
+
+def test_malformed_xml_exit_code(tmp_path):
+    src = tmp_path / "bad.xml"
+    src.write_text("<r><p>unclosed</r>")
+    assert runner.invoke(app, [str(src)]).exit_code == 3
+    assert not (tmp_path / "bad.corrected.xml").exists()
