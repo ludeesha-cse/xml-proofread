@@ -12,6 +12,7 @@ DATE_FORMAT = "%H:%M:%S"
 _NOISY_LOGGERS = ("httpx", "httpcore", "urllib3", "google", "google_genai", "langchain")
 
 
+# sigleton logger for the whole program
 def setup_logging(verbose: bool = False) -> None:
     """Send logs to stderr. Level is DEBUG with --verbose, otherwise INFO."""
     logging.basicConfig(

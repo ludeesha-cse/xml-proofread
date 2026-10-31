@@ -43,6 +43,7 @@ class XmlDocument:
         return self.tree.getroot()
 
 
+# Factory Function
 def _make_parser() -> etree.XMLParser:
     """An lxml parser that keeps everything and is safe against hostile files."""
     return etree.XMLParser(
@@ -100,6 +101,7 @@ def save_xml(doc: XmlDocument, path: Path) -> None:
     We write to a temporary file in the same folder, then rename it over the target.
     A crash halfway through can never leave a half-written output file behind.
     """
+    # Atomic Write (write-temp-then-rename)
     data = serialize(doc)
     if path.exists():
         logger.info("Overwriting existing file %s", path)

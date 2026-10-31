@@ -6,6 +6,7 @@ a predictable status instead of crashing with a stack trace.
 """
 
 
+# inheritance + polymorphism. 
 class ProofreadError(Exception):
     """Base class for all expected failures. Default exit code is 1."""
 
