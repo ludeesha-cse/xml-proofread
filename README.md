@@ -48,7 +48,7 @@ Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/), and a
 
 ```bash
 git clone https://github.com/ludeesha-cse/xml-proofread.git
-cd xml-proofreader
+cd xml-proofread
 uv sync                      # creates .venv and installs dependencies
 cp .env.example .env         # then paste your GOOGLE_API_KEY into .env
 
