@@ -12,6 +12,7 @@ from lxml import etree
 
 from proofread.models import ERROR_TYPES, ErrorSpan
 from proofread.paragraph import TextSlot, contains_cdata, paragraph_text, text_slots
+
 logger = logging.getLogger(__name__)
 
 

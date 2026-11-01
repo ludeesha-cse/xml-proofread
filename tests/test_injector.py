@@ -3,11 +3,10 @@
 import pytest
 from lxml import etree
 
-from proofread.injector import validate_spans
+from proofread import injector
+from proofread.injector import annotate_paragraph, validate_spans
 from proofread.models import ErrorSpan
 from proofread.paragraph import paragraph_text, text_slots
-from proofread.injector import annotate_paragraph, validate_spans
-from proofread import injector
 
 
 def first_p(xml: str) -> etree._Element:

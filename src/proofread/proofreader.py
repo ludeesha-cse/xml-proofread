@@ -1,0 +1,150 @@
+"""Send paragraphs to the LLM in batches and turn its answers into ErrorSpans.
+
+The model answers in token numbers. This module checks those numbers against the
+tokens we sent, converts them to character positions, and handles failed requests.
+"""
+
+import logging
+from dataclasses import dataclass, field
+
+from langchain_core.runnables import Runnable
+from lxml import etree
+
+from proofread.exceptions import LLMError
+from proofread.models import ErrorSpan
+from proofread.paragraph import contains_cdata, text_slots
+from proofread.prompts import build_messages
+from proofread.schema import FoundError, ProofreadResponse
+from proofread.tokenizer import Token, token_range_to_chars, tokenize
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ParagraphJob:
+    """One paragraph, prepared for the model."""
+
+    index: int  # position in the document's list of <p> elements
+    text: str
+    tokens: list[Token]
+
+
+@dataclass
+class ProofreadOutput:
+    """Everything the model found, keyed by paragraph index."""
+
+    spans: dict[int, list[ErrorSpan]] = field(default_factory=dict)
+    dropped: int = 0  # suggestions we could not map to the text
+    failed: list[int] = field(default_factory=list)  # paragraphs whose request failed
+
+
+def make_job(index: int, p: etree._Element) -> ParagraphJob | None:
+    """Prepare a paragraph for the model, or return None if there is nothing to check."""
+    if contains_cdata(p):
+        logger.debug("Skipping paragraph %d: contains CDATA", index)
+        return None
+    pieces = [slot.value for slot in text_slots(p)]
+    text = "".join(pieces)
+    if not any(ch.isalpha() for ch in text):
+        return None  # empty, whitespace or numbers only: nothing to proofread
+    return ParagraphJob(index=index, text=text, tokens=tokenize(pieces))
+
+
+def _find_tokens(tokens: list[Token], original: str) -> tuple[int, int] | None:
+    """Find the only token range whose text equals `original`, if there is exactly one."""
+    matches = []
+    for first in range(len(tokens)):
+        joined = ""
+        for last in range(first, len(tokens)):
+            joined += tokens[last].text
+            if joined == original:
+                matches.append((first, last))
+            if len(joined) >= len(original):
+                break
+    return matches[0] if len(matches) == 1 else None
+
+
+def to_error_span(job: ParagraphJob, found: FoundError) -> ErrorSpan:
+    """Convert one model suggestion into an ErrorSpan. Raises ValueError if impossible.
+
+    Models sometimes get a token number off by one. The `original` field lets us notice:
+    if the selected tokens don't spell `original`, we look for `original` in the
+    paragraph and use it if it appears exactly once.
+    """
+    first, last = found.first_token, found.last_token
+    selected = "".join(t.text for t in job.tokens[first : last + 1]) if first <= last else ""
+    if selected != found.original:
+        fixed = _find_tokens(job.tokens, found.original)
+        if fixed is None:
+            raise ValueError(
+                f"tokens {first}-{last} are {selected!r}, not {found.original!r}, "
+                "and that text could not be located unambiguously"
+            )
+        logger.debug("Corrected token range %d-%d to %d-%d", first, last, *fixed)
+        first, last = fixed
+
+    start, end = token_range_to_chars(job.tokens, first, last)
+    return ErrorSpan(
+        start=start,
+        end=end,
+        type=found.type,
+        correction=found.correction,
+        reason=getattr(found, "reason", None),  # only present if the extra credit is on
+    )
+
+
+class Proofreader:
+    """Runs batches of ParagraphJobs through a structured-output LLM."""
+
+    def __init__(
+        self, llm: Runnable, *, language: str, lang: str, batch_size: int, strict: bool
+    ) -> None:
+        self._llm = llm  # returns a ProofreadResponse (see llm.build_structured_llm)
+        self._language = language
+        self._lang = lang
+        self._batch_size = batch_size
+        self._strict = strict
+
+    def proofread(self, jobs: list[ParagraphJob]) -> ProofreadOutput:
+        output = ProofreadOutput()
+        for i in range(0, len(jobs), self._batch_size):
+            self._run_batch(jobs[i : i + self._batch_size], output)
+        return output
+
+    def _run_batch(self, batch: list[ParagraphJob], output: ProofreadOutput) -> None:
+        messages = build_messages(
+            self._language, self._lang, [(job.text, job.tokens) for job in batch]
+        )
+        try:
+            response: ProofreadResponse = self._llm.invoke(messages)
+        except Exception as exc:
+            indexes = [job.index for job in batch]
+            if self._strict:
+                raise LLMError(f"LLM request failed for paragraphs {indexes}: {exc}") from exc
+            logger.warning("LLM request failed; leaving paragraphs %s unchanged: %s", indexes, exc)
+            output.failed += indexes
+            return
+
+        # The prompt asks for every paragraph id. A missing one could mean "no errors"
+        # or "forgot it", and we can't tell which, so treat it as not proofread.
+        returned = {answer.id for answer in response.paragraphs}
+        missing = [job.index for i, job in enumerate(batch) if i not in returned]
+        if missing:
+            if self._strict:
+                raise LLMError(f"The model skipped paragraphs {missing}")
+            logger.warning("The model skipped paragraphs %s; leaving them unchanged", missing)
+            output.failed += missing
+
+        for answer in response.paragraphs:
+            if not 0 <= answer.id < len(batch):
+                logger.debug("Ignoring answer for unknown paragraph id %d", answer.id)
+                continue
+            job = batch[answer.id]
+            for found in answer.errors:
+                try:
+                    span = to_error_span(job, found)
+                except ValueError as exc:
+                    output.dropped += 1
+                    logger.debug("Dropped suggestion in paragraph %d: %s", job.index, exc)
+                    continue
+                output.spans.setdefault(job.index, []).append(span)

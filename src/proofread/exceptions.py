@@ -29,3 +29,9 @@ class OutputFileError(ProofreadError):
     """The output file could not be written."""
 
     exit_code = 4
+
+
+class LLMError(ProofreadError):
+    """The model could not be reached or kept failing (only raised when it matters)."""
+
+    exit_code = 5

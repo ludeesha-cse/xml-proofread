@@ -1094,6 +1094,7 @@ dependencies = [
     { name = "langcodes" },
     { name = "language-data" },
     { name = "lxml" },
+    { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "typer" },
 ]
@@ -1112,6 +1113,7 @@ requires-dist = [
     { name = "langcodes", specifier = ">=3.3.0" },
     { name = "language-data", specifier = ">=1.2.0" },
     { name = "lxml", specifier = ">=5.0.0" },
+    { name = "pydantic", specifier = ">=2.14.2" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "typer", specifier = ">=0.12.0" },
 ]
