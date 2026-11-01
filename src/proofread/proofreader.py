@@ -13,7 +13,7 @@ from lxml import etree
 
 from proofread.exceptions import LLMError
 from proofread.models import ErrorSpan
-from proofread.paragraph import contains_cdata, text_slots
+from proofread.paragraph import contains_cdata, has_error_tags, text_slots
 from proofread.prompts import build_messages
 from proofread.schema import FoundError, ProofreadResponse
 from proofread.tokenizer import Token, token_range_to_chars, tokenize
@@ -47,6 +47,9 @@ def make_job(index: int, p: etree._Element) -> ParagraphJob | None:
     if contains_cdata(p):
         logger.debug("Skipping paragraph %d: contains CDATA", index)
         return None
+    if has_error_tags(p):
+        logger.debug("Skipping paragraph %d: already has <error> tags", index)
+        return None    
     pieces = [slot.value for slot in text_slots(p)]
     text = "".join(pieces)
     if not any(ch.isalpha() for ch in text):

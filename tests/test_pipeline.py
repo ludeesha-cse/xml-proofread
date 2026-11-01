@@ -108,3 +108,13 @@ def test_no_paragraphs_needs_no_model(tmp_path, monkeypatch):
     result = run(settings_for(src))
     assert (result.proofread, result.requests) == (0, 0)
     assert result.output_path.read_bytes() == src.read_bytes()
+
+
+def test_running_on_its_own_output_changes_nothing(sample_copy, fake_llm):
+    first = run(settings_for(sample_copy), llm=fake_llm(SAMPLE_ANSWERS))
+    second_input = sample_copy.parent / "again.xml"
+    second_input.write_bytes(first.output_path.read_bytes())
+
+    second = run(settings_for(second_input), llm=fake_llm(SAMPLE_ANSWERS))
+    assert second.output_path.read_bytes() == first.output_path.read_bytes()  # no nesting
+    assert second.proofread == 1  # only the paragraph that had no errors was sent again

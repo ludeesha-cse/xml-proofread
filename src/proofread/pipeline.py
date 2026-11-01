@@ -19,6 +19,7 @@ from proofread.llm import build_structured_llm, create_chat_model
 from proofread.metrics import Stopwatch, peak_memory_mb, token_totals
 from proofread.proofreader import ParagraphJob, Proofreader, ProofreadOutput, make_job
 from proofread.xml_io import find_paragraphs, load_xml, save_xml
+from proofread.paragraph import has_error_tags
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,12 @@ def run(settings: Settings, llm: Runnable | None = None) -> RunResult:
         paragraphs = find_paragraphs(doc.root)
         jobs = [job for i, p in enumerate(paragraphs) if (job := make_job(i, p))]
     logger.info("Found %d <p> element(s); %d need proofreading", len(paragraphs), len(jobs))
+    if already := sum(has_error_tags(p) for p in paragraphs):
+        logger.warning(
+            "%d paragraph(s) already contain <error> tags (is this an output file?); "
+            "they were left unchanged",
+            already,
+        )
 
     token_counter = UsageMetadataCallbackHandler()  # LangChain adds up token usage here
     found = ProofreadOutput()

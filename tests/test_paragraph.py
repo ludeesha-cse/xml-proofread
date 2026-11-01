@@ -2,7 +2,7 @@
 
 from lxml import etree
 
-from proofread.paragraph import contains_cdata, paragraph_text, text_slots
+from proofread.paragraph import contains_cdata, has_error_tags, paragraph_text, text_slots
 
 PARSER = etree.XMLParser(strip_cdata=False, resolve_entities=False)
 
@@ -59,3 +59,14 @@ def test_text_after_the_paragraph_is_not_included():
 def test_contains_cdata():
     assert contains_cdata(first_p("<r><p>x <![CDATA[a < b]]> y</p></r>"))
     assert not contains_cdata(first_p("<r><p>x &lt; y</p></r>"))
+
+
+def test_has_error_tags_looks_only_at_its_own_text():
+    root = etree.fromstring(
+        b'<r><p id="a">x <error type="grammar" correction="X">y</error></p>'
+        b'<p id="b">z <p id="c"><error type="grammar" correction="W">w</error></p></p></r>'
+    )
+    a, b, c = root.iter("{*}p")
+    assert has_error_tags(a)
+    assert not has_error_tags(b)  # the error belongs to the nested <p id="c">
+    assert has_error_tags(c)
