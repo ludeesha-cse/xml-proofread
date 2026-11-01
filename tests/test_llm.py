@@ -17,7 +17,9 @@ from langchain_core.runnables import RunnableLambda
 from proofread.config import build_settings
 from proofread.exceptions import ConfigError
 from proofread.llm import (
-    OLLAMA_CONTEXT_TOKENS,
+    OLLAMA_MAX_CONTEXT,
+    OLLAMA_MIN_CONTEXT,
+    ollama_context_size,
     build_structured_llm,
     create_chat_model,
     is_retryable,
@@ -47,7 +49,7 @@ def test_ollama_model_settings(settings_for):
     assert type(model).__name__ == "ChatOllama"
     assert model.model == "qwen3:8b"
     assert model.temperature == 0
-    assert model.num_ctx == OLLAMA_CONTEXT_TOKENS
+    assert model.num_ctx == ollama_context_size(10)
     assert model.reasoning is False
     assert model.client_kwargs == {"timeout": 42.0}
 
@@ -83,6 +85,24 @@ def test_anthropic_model_settings(settings_for, monkeypatch):
     assert "temperature" not in model_kwargs(settings_for("anthropic:claude-haiku-5-5"))
 
 
+@pytest.mark.parametrize(
+    ("batch_size", "expected"),
+    [
+        (1, OLLAMA_MIN_CONTEXT),  # small batches still get the minimum
+        (10, OLLAMA_MIN_CONTEXT),  # 2048 + 6000 = 8048 -> 8192
+        (20, 14336),  # 2048 + 12000 = 14048 -> rounded up to 14 x 1024
+        (100, OLLAMA_MAX_CONTEXT),  # capped
+    ],
+)
+def test_ollama_context_grows_with_batch_size(batch_size, expected):
+    assert ollama_context_size(batch_size) == expected
+
+
+def test_too_large_batch_for_ollama_warns(caplog):
+    ollama_context_size(100)
+    assert "too large for Ollama" in caplog.text
+
+    
 def test_unknown_provider_gives_config_error(settings_for):
     with pytest.raises(ConfigError):
         create_chat_model(settings_for("no_such_provider:model"))

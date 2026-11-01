@@ -20,9 +20,14 @@ from proofread.schema import ProofreadResponse
 
 logger = logging.getLogger(__name__)
 
-# Ollama's default context window is small. If the prompt is longer, Ollama silently
-# drops the start of it (our instructions!). 8192 tokens fits a batch of 10 paragraphs.
-OLLAMA_CONTEXT_TOKENS = 8192
+# Ollama's context window must fit the whole prompt plus the answer. If it is too
+# small, Ollama silently drops the START of the prompt, which is our instructions.
+# Measured with qwen3: the instructions take about 1,700 tokens, and each 50-word
+# paragraph about 530 more (its text and token list, plus room for the answer).
+OLLAMA_BASE_TOKENS = 2048
+OLLAMA_TOKENS_PER_PARAGRAPH = 600  # a little above the measured 530, for safety
+OLLAMA_MIN_CONTEXT = 8192
+OLLAMA_MAX_CONTEXT = 32768  # bigger windows need a lot more memory on a 16 GB Mac
 
 # How to install each provider's LangChain package, for a helpful error message.
 # Gemini and Ollama are core dependencies; OpenAI and Anthropic are optional extras.
@@ -39,6 +44,18 @@ PROVIDER_INSTALL = {
 TEMPERATURE_PROVIDERS = {"ollama", "openai"}
 
 
+def ollama_context_size(batch_size: int) -> int:
+    """Context window (num_ctx) for a batch, rounded up to a multiple of 1024."""
+    needed = OLLAMA_BASE_TOKENS + OLLAMA_TOKENS_PER_PARAGRAPH * batch_size
+    rounded = -(-needed // 1024) * 1024  # round up: -(-a // b) is ceiling division
+    if rounded > OLLAMA_MAX_CONTEXT:
+        logger.warning(
+            "--batch-size %d is too large for Ollama; long batches may be cut off. Use 50 or less.",
+            batch_size,
+        )
+    return min(max(rounded, OLLAMA_MIN_CONTEXT), OLLAMA_MAX_CONTEXT)
+
+
 def model_kwargs(settings: Settings) -> dict[str, Any]:
     """Provider-specific options.
 
@@ -49,7 +66,7 @@ def model_kwargs(settings: Settings) -> dict[str, Any]:
     if settings.provider in TEMPERATURE_PROVIDERS:
         kwargs["temperature"] = 0  # same input -> same output
     if settings.provider == "ollama":
-        kwargs["num_ctx"] = OLLAMA_CONTEXT_TOKENS
+        kwargs["num_ctx"] = ollama_context_size(settings.batch_size)
         kwargs["reasoning"] = False  # no "thinking" step: much faster, not needed here
         kwargs["client_kwargs"] = {"timeout": settings.timeout_s}
     elif settings.provider in ("google_genai", "openai", "anthropic"):
