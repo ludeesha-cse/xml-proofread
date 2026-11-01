@@ -24,8 +24,19 @@ logger = logging.getLogger(__name__)
 # drops the start of it (our instructions!). 8192 tokens fits a batch of 10 paragraphs.
 OLLAMA_CONTEXT_TOKENS = 8192
 
-# LangChain package each provider needs, for a helpful error message.
-PROVIDER_PACKAGES = {"google_genai": "langchain-google-genai", "ollama": "langchain-ollama"}
+# How to install each provider's LangChain package, for a helpful error message.
+# Gemini and Ollama are core dependencies; OpenAI and Anthropic are optional extras.
+PROVIDER_INSTALL = {
+    "google_genai": "uv add langchain-google-genai",
+    "ollama": "uv add langchain-ollama",
+    "openai": "uv sync --extra openai",
+    "anthropic": "uv sync --extra anthropic",
+}
+
+# Providers whose models accept temperature=0. Gemini 3 uses fixed sampling and warns,
+# and newer Claude models reject it ("omit temperature"). LangChain's OpenAI class
+# already drops it for GPT-5 models that don't support it.
+TEMPERATURE_PROVIDERS = {"ollama", "openai"}
 
 
 def model_kwargs(settings: Settings) -> dict[str, Any]:
@@ -35,18 +46,15 @@ def model_kwargs(settings: Settings) -> dict[str, Any]:
     gets only the names it actually supports.
     """
     kwargs: dict[str, Any] = {}
-    if settings.provider != "google_genai":
-        # Same input -> same output. Gemini 3 models ignore temperature (they use fixed
-        # sampling defaults and LangChain warns about it), so it is not sent to Gemini.
-        kwargs["temperature"] = 0
+    if settings.provider in TEMPERATURE_PROVIDERS:
+        kwargs["temperature"] = 0  # same input -> same output
     if settings.provider == "ollama":
         kwargs["num_ctx"] = OLLAMA_CONTEXT_TOKENS
         kwargs["reasoning"] = False  # no "thinking" step: much faster, not needed here
         kwargs["client_kwargs"] = {"timeout": settings.timeout_s}
-    elif settings.provider == "google_genai":
+    elif settings.provider in ("google_genai", "openai", "anthropic"):
         kwargs["timeout"] = settings.timeout_s
         kwargs["max_retries"] = 0  # we retry ourselves (see build_structured_llm)
-        kwargs["thinking_level"] = "minimal"
     return kwargs
 
 
@@ -59,11 +67,10 @@ def create_chat_model(settings: Settings) -> BaseChatModel:
             **model_kwargs(settings),
         )
     except ImportError as exc:
-        package = PROVIDER_PACKAGES.get(
-            settings.provider, f"the LangChain package for '{settings.provider}'"
-        )
+        install = PROVIDER_INSTALL.get(settings.provider)
+        hint = f" Install it with: {install}" if install else ""
         raise ConfigError(
-            f"Provider '{settings.provider}' needs {package}. Install it with: uv add {package}"
+            f"Provider '{settings.provider}' needs its LangChain package.{hint}"
         ) from exc
     except ValueError as exc:  # e.g. a provider name LangChain doesn't know
         raise ConfigError(f"Cannot create model '{settings.model}': {exc}") from exc

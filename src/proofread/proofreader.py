@@ -38,6 +38,7 @@ class ProofreadOutput:
     dropped: int = 0  # suggestions we could not map to the text
     failed: list[int] = field(default_factory=list)  # paragraphs whose request failed
     requests: int = 0  # LLM requests made (not counting retries)
+    first_error: str | None = None  # why the first failed request failed, for messages
     duplicates: int = 0  # paragraphs not sent because an identical one was
 
 
@@ -186,6 +187,7 @@ class Proofreader:
                 raise LLMError(f"LLM request failed for paragraphs {indexes}: {exc}") from exc
             logger.warning("LLM request failed; leaving paragraphs %s unchanged: %s", indexes, exc)
             output.failed += indexes
+            output.first_error = output.first_error or f"{type(exc).__name__}: {exc}"
             return
 
         # The prompt asks for every paragraph id. A missing one could mean "no errors"

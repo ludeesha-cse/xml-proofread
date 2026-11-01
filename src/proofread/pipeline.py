@@ -17,7 +17,7 @@ from proofread.exceptions import LLMError
 from proofread.injector import annotate_paragraph
 from proofread.llm import build_structured_llm, create_chat_model
 from proofread.metrics import Stopwatch, peak_memory_mb, token_totals
-from proofread.proofreader import Proofreader, ProofreadOutput, make_job
+from proofread.proofreader import ParagraphJob, Proofreader, ProofreadOutput, make_job
 from proofread.xml_io import find_paragraphs, load_xml, save_xml
 
 logger = logging.getLogger(__name__)
@@ -59,21 +59,17 @@ async def close_model(model: object) -> None:
         logger.debug("Closing the model failed: %s", exc)
 
 
-def run(settings: Settings, llm: Runnable | None = None) -> RunResult:
-    """Proofread one file. Pass `llm` to use a fake model in tests."""
-    stopwatch = Stopwatch()
-
-    with stopwatch.stage("parse"):
-        doc = load_xml(settings.input_path)
-        paragraphs = find_paragraphs(doc.root)
-        jobs = [job for i, p in enumerate(paragraphs) if (job := make_job(i, p))]
-    logger.info("Found %d <p> element(s); %d need proofreading", len(paragraphs), len(jobs))
-
+def _proofread(
+    settings: Settings,
+    llm: Runnable | None,
+    jobs: list[ParagraphJob],
+    token_counter: UsageMetadataCallbackHandler,
+) -> ProofreadOutput:
+    """Create the model (unless a test passed one in) and proofread every job."""
     chat_model = None
     if llm is None:
         chat_model = create_chat_model(settings)
         llm = build_structured_llm(chat_model, settings)
-    token_counter = UsageMetadataCallbackHandler()  # LangChain adds up token usage here
     proofreader = Proofreader(
         llm,
         language=settings.language_name,
@@ -90,13 +86,33 @@ def run(settings: Settings, llm: Runnable | None = None) -> RunResult:
         finally:
             await close_model(chat_model)
 
+    return asyncio.run(proofread_then_close())
+
+
+def run(settings: Settings, llm: Runnable | None = None) -> RunResult:
+    """Proofread one file. Pass `llm` to use a fake model in tests."""
+    stopwatch = Stopwatch()
+
+    with stopwatch.stage("parse"):
+        doc = load_xml(settings.input_path)
+        paragraphs = find_paragraphs(doc.root)
+        jobs = [job for i, p in enumerate(paragraphs) if (job := make_job(i, p))]
+    logger.info("Found %d <p> element(s); %d need proofreading", len(paragraphs), len(jobs))
+
+    token_counter = UsageMetadataCallbackHandler()  # LangChain adds up token usage here
+    found = ProofreadOutput()
     with stopwatch.stage("proofread"):
-        found = asyncio.run(proofread_then_close())
+        if jobs:  # nothing to check means no model is needed (no API key, no Ollama)
+            found = _proofread(settings, llm, jobs, token_counter)
 
     if jobs and len(found.failed) == len(jobs):
         # Nothing worked at all: almost certainly a setup problem (Ollama not running,
         # wrong model name, bad API key). Fail loudly instead of writing an unchanged copy.
-        raise LLMError("Every LLM request failed. Check the model name, API key or Ollama.")
+        raise LLMError(
+            f"Every LLM request failed ({found.first_error}). "
+            "Check the model name, the API key, or that Ollama is running."
+        )
+    
 
     applied = 0
     rejected = found.dropped

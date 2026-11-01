@@ -71,7 +71,7 @@ def test_pipeline_with_no_errors_writes_identical_copy(sample_copy, fake_llm):
 
 
 def test_pipeline_fails_when_every_request_fails(sample_copy, fake_llm):
-    with pytest.raises(LLMError, match="Every LLM request failed"):
+    with pytest.raises(LLMError, match=r"Every LLM request failed \(ConnectionError: model"):
         run(settings_for(sample_copy), llm=fake_llm(fail=True))
     assert not (sample_copy.parent / "input.corrected.xml").exists()
 
@@ -96,3 +96,15 @@ def test_pipeline_closes_the_model_before_the_event_loop_ends(sample_copy, fake_
     monkeypatch.setattr("proofread.pipeline.build_structured_llm", lambda m, s: fake_llm({}))
     run(settings_for(sample_copy))
     assert events == ["closed"]
+
+
+def test_no_paragraphs_needs_no_model(tmp_path, monkeypatch):
+    def no_model(settings):
+        raise AssertionError("the model should not be created")
+
+    monkeypatch.setattr("proofread.pipeline.create_chat_model", no_model)
+    src = tmp_path / "in.xml"
+    src.write_bytes(b"<r><title>No paragraphs here</title><p>  </p></r>")
+    result = run(settings_for(src))
+    assert (result.proofread, result.requests) == (0, 0)
+    assert result.output_path.read_bytes() == src.read_bytes()

@@ -60,6 +60,29 @@ def test_gemini_model_settings(settings_for):
     assert model.max_retries == 0
 
 
+def test_openai_model_settings(settings_for, monkeypatch):
+    pytest.importorskip("langchain_openai")  # optional extra: skip if not installed
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy")
+    model = create_chat_model(settings_for("openai:gpt-5.4-mini"))
+    assert type(model).__name__ == "ChatOpenAI"
+    assert model.model_name == "gpt-5.4-mini"
+    assert model.request_timeout == 42.0
+    assert model.max_retries == 0
+    assert model_kwargs(settings_for("openai:gpt-5.4-mini"))["temperature"] == 0
+
+
+def test_anthropic_model_settings(settings_for, monkeypatch):
+    pytest.importorskip("langchain_anthropic")  # optional extra: skip if not installed
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+    model = create_chat_model(settings_for("anthropic:claude-haiku-5-5"))
+    assert type(model).__name__ == "ChatAnthropic"
+    assert model.model == "claude-haiku-5-5"
+    assert model.default_request_timeout == 42.0
+    assert model.max_retries == 0
+    # Newer Claude models reject temperature, so it must not be sent.
+    assert "temperature" not in model_kwargs(settings_for("anthropic:claude-haiku-5-5"))
+
+
 def test_unknown_provider_gives_config_error(settings_for):
     with pytest.raises(ConfigError):
         create_chat_model(settings_for("no_such_provider:model"))
@@ -78,6 +101,8 @@ def test_missing_provider_package_gives_install_hint(settings_for, monkeypatch):
     monkeypatch.setattr("proofread.llm.init_chat_model", missing_package)
     with pytest.raises(ConfigError, match="uv add langchain-ollama"):
         create_chat_model(settings_for("ollama:qwen3:8b"))
+    with pytest.raises(ConfigError, match="uv sync --extra openai"):
+        create_chat_model(settings_for("openai:gpt-5.4-mini"))
 
 
 # --- is_retryable -----------------------------------------------------------------------
