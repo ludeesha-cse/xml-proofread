@@ -1,5 +1,6 @@
 """Shared test helpers. pytest loads this file automatically."""
 
+import asyncio
 import json
 import re
 
@@ -24,12 +25,16 @@ class FakeLLM:
         self,
         answers: dict[str, list[tuple]] | None = None,
         fail: bool = False,
+        delay: float = 0.0,
         skip: set[str] | None = None,
     ):
         self.answers = answers or {}
         self.fail = fail
         self.skip = skip or set()  # paragraph texts to leave out of the answer
+        self.delay = delay  # seconds each async call takes, to test parallel requests
         self.calls: list[list[str]] = []  # paragraph texts sent in each call
+        self.in_flight = 0  # calls running right now
+        self.max_in_flight = 0  # most calls that ever ran at the same time
 
     def invoke(self, messages) -> ProofreadResponse:
         found = [
@@ -57,6 +62,16 @@ class FakeLLM:
             ]
             paragraphs.append(ParagraphErrors(id=pid, errors=errors))
         return ProofreadResponse(paragraphs=paragraphs)
+
+    async def ainvoke(self, messages, config=None) -> ProofreadResponse:
+        """Async version, used by the Proofreader. Tracks how many calls overlap."""
+        self.in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        try:
+            await asyncio.sleep(self.delay)
+            return self.invoke(messages)
+        finally:
+            self.in_flight -= 1
 
     def as_runnable(self):
         """Wrap as a LangChain Runnable, like the real chain."""

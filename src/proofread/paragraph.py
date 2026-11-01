@@ -76,3 +76,16 @@ def contains_cdata(p: etree._Element) -> bool:
     paragraphs are left unchanged.
     """
     return b"<![CDATA[" in etree.tostring(p, with_tail=False)
+
+
+def has_error_tags(p: etree._Element) -> bool:
+    """True if this paragraph (not a nested <p> inside it) already has <error> tags.
+
+    That happens when the tool is run on its own output. Proofreading such a paragraph
+    again would wrap errors inside errors, so it is left as it is.
+    """
+    for error in p.iter("{*}error"):
+        owner = next(a for a in error.iterancestors() if is_paragraph(a))
+        if owner is p:
+            return True
+    return False

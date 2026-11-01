@@ -11,6 +11,7 @@ from proofread import __version__
 from proofread.config import DEFAULT_MODEL, MODEL_ENV_VAR, build_settings, require_api_key
 from proofread.exceptions import ProofreadError
 from proofread.logging_setup import setup_logging
+from proofread.pipeline import RunResult
 from proofread.pipeline import run as run_pipeline
 
 logger = logging.getLogger("proofread")
@@ -19,6 +20,27 @@ app = typer.Typer(
     add_completion=False,  # hide Typer's shell-completion options
     help="Proofread <p> elements in an XML file and write <input>.corrected.xml.",
 )
+
+
+def format_summary(result: RunResult, model: str) -> str:
+    """The end-of-run report printed to stdout (logs go to stderr)."""
+    stages = ", ".join(f"{name} {secs:.2f}s" for name, secs in result.stage_seconds.items())
+    memory = f"{result.peak_memory_mb:.1f} MB" if result.peak_memory_mb else "n/a"
+    return "\n".join(
+        [
+            "",
+            "Summary",
+            f"  Output:      {result.output_path}",
+            f"  Model:       {model}",
+            f"  Paragraphs:  {result.paragraphs} found, {result.proofread} proofread "
+            f"({result.duplicates} duplicate), {result.failed} failed",
+            f"  Errors:      {result.errors_applied} marked, {result.errors_rejected} rejected",
+            f"  LLM:         {result.requests} request(s), {result.input_tokens:,} input "
+            f"+ {result.output_tokens:,} output tokens",
+            f"  Time:        {result.total_seconds:.2f}s ({stages})",
+            f"  Peak memory: {memory}",
+        ]
+    )
 
 
 # Pattern: Callback (Observer-like hook). Typer calls this when --version is parsed.
@@ -99,7 +121,8 @@ def run(
         logger.debug("Settings: %s", settings)
 
         # parse XML -> proofread -> inject -> write.
-        run_pipeline(settings)
+        result = run_pipeline(settings)
+        typer.echo(format_summary(result, settings.model))
 
     # Pattern: Error Boundary. All exceptions are handled here, most specific first, and mapped
     # to exit codes. ProofreadError uses polymorphism: exc.exit_code differs per subclass.

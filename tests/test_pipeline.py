@@ -71,6 +71,50 @@ def test_pipeline_with_no_errors_writes_identical_copy(sample_copy, fake_llm):
 
 
 def test_pipeline_fails_when_every_request_fails(sample_copy, fake_llm):
-    with pytest.raises(LLMError, match="Every LLM request failed"):
+    with pytest.raises(LLMError, match=r"Every LLM request failed \(ConnectionError: model"):
         run(settings_for(sample_copy), llm=fake_llm(fail=True))
     assert not (sample_copy.parent / "input.corrected.xml").exists()
+
+
+def test_pipeline_reports_timings_and_memory(sample_copy, fake_llm):
+    result = run(settings_for(sample_copy), llm=fake_llm({}))
+    assert list(result.stage_seconds) == ["parse", "proofread", "annotate", "write"]
+    assert all(seconds >= 0 for seconds in result.stage_seconds.values())
+    assert result.total_seconds >= sum(result.stage_seconds.values())
+    assert result.requests == 3  # 5 paragraphs, batch_size=2
+    assert result.peak_memory_mb is None or result.peak_memory_mb > 0
+
+
+def test_pipeline_closes_the_model_before_the_event_loop_ends(sample_copy, fake_llm, monkeypatch):
+    events = []
+
+    class FakeChatModel:
+        async def aclose(self):
+            events.append("closed")  # an awaitable close, like Gemini's
+
+    monkeypatch.setattr("proofread.pipeline.create_chat_model", lambda s: FakeChatModel())
+    monkeypatch.setattr("proofread.pipeline.build_structured_llm", lambda m, s: fake_llm({}))
+    run(settings_for(sample_copy))
+    assert events == ["closed"]
+
+
+def test_no_paragraphs_needs_no_model(tmp_path, monkeypatch):
+    def no_model(settings):
+        raise AssertionError("the model should not be created")
+
+    monkeypatch.setattr("proofread.pipeline.create_chat_model", no_model)
+    src = tmp_path / "in.xml"
+    src.write_bytes(b"<r><title>No paragraphs here</title><p>  </p></r>")
+    result = run(settings_for(src))
+    assert (result.proofread, result.requests) == (0, 0)
+    assert result.output_path.read_bytes() == src.read_bytes()
+
+
+def test_running_on_its_own_output_changes_nothing(sample_copy, fake_llm):
+    first = run(settings_for(sample_copy), llm=fake_llm(SAMPLE_ANSWERS))
+    second_input = sample_copy.parent / "again.xml"
+    second_input.write_bytes(first.output_path.read_bytes())
+
+    second = run(settings_for(second_input), llm=fake_llm(SAMPLE_ANSWERS))
+    assert second.output_path.read_bytes() == first.output_path.read_bytes()  # no nesting
+    assert second.proofread == 1  # only the paragraph that had no errors was sent again
