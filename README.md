@@ -359,4 +359,4 @@ nested `<p>`, namespaces, entities, comments, CDATA, empty paragraphs).
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+Proprietary, all rights reserved. See [LICENSE](LICENSE).

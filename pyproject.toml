@@ -7,7 +7,8 @@ authors = [
     { name = "Ludeesha Nanayakkara", email = "ludeeshananayakkara@gmail.com" }
 ]
 requires-python = ">=3.11"
-license = "MIT"
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
 dependencies = [
     "httpx>=0.28.1",
     "langchain>=0.3.0",
