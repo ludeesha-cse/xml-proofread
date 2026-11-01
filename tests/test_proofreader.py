@@ -148,3 +148,17 @@ def test_concurrency_one_runs_requests_one_at_a_time(fake_llm):
     llm = fake_llm(delay=0.01)
     proofread(llm, [job(f"T{i}.", index=i) for i in range(4)], batch_size=1, concurrency=1)
     assert llm.max_in_flight == 1
+
+
+def test_identical_paragraphs_are_sent_once(fake_llm):
+    llm = fake_llm({"i agree.": [(0, 0, "capitalization", "I")]})
+    jobs = [job("i agree.", index=0), job("Other.", index=1), job("i agree.", index=2)]
+    output = proofread(llm, jobs)
+    assert llm.calls == [["i agree.", "Other."]]  # the duplicate was not sent
+    assert output.duplicates == 1
+    assert output.spans[0] == output.spans[2]  # but both got the answer
+
+
+def test_failure_is_copied_to_duplicates(fake_llm):
+    output = proofread(fake_llm(fail=True), [job("a b", index=0), job("a b", index=5)])
+    assert sorted(output.failed) == [0, 5]

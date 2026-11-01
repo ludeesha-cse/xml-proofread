@@ -74,3 +74,12 @@ def test_pipeline_fails_when_every_request_fails(sample_copy, fake_llm):
     with pytest.raises(LLMError, match="Every LLM request failed"):
         run(settings_for(sample_copy), llm=fake_llm(fail=True))
     assert not (sample_copy.parent / "input.corrected.xml").exists()
+
+
+def test_pipeline_reports_timings_and_memory(sample_copy, fake_llm):
+    result = run(settings_for(sample_copy), llm=fake_llm({}))
+    assert list(result.stage_seconds) == ["parse", "proofread", "annotate", "write"]
+    assert all(seconds >= 0 for seconds in result.stage_seconds.values())
+    assert result.total_seconds >= sum(result.stage_seconds.values())
+    assert result.requests == 3  # 5 paragraphs, batch_size=2
+    assert result.peak_memory_mb is None or result.peak_memory_mb > 0

@@ -80,6 +80,7 @@ def test_run_writes_identical_copy(tmp_path):
     assert result.exit_code == 0
     out = tmp_path / "input.corrected.xml"
     assert out.read_bytes() == src.read_bytes()
+    assert "Summary" in result.stdout and "Peak memory" in result.stdout
 
 
 def test_malformed_xml_exit_code(tmp_path):

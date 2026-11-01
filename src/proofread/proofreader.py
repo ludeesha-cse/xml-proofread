@@ -121,8 +121,17 @@ class Proofreader:
     async def proofread(self, jobs: list[ParagraphJob]) -> ProofreadOutput:
         output = ProofreadOutput()
 
+        # Identical paragraphs (same tokens) get identical answers: send each once.
+        groups: dict[tuple[str, ...], list[ParagraphJob]] = {}
+        for job in jobs:
+            groups.setdefault(tuple(t.text for t in job.tokens), []).append(job)
+        unique = [same[0] for same in groups.values()]
+        output.duplicates = len(jobs) - len(unique)
+
         # Run the batches in parallel, but never more than `concurrency` at once.
-        batches = [jobs[i : i + self._batch_size] for i in range(0, len(jobs), self._batch_size)]
+        batches = [
+            unique[i : i + self._batch_size] for i in range(0, len(unique), self._batch_size)
+        ]
         semaphore = asyncio.Semaphore(self._concurrency)
 
         async def run_limited(batch: list[ParagraphJob]) -> None:
@@ -130,6 +139,14 @@ class Proofreader:
                 await self._run_batch(batch, output)
 
         await asyncio.gather(*(run_limited(batch) for batch in batches))
+
+        # Copy each answer to the duplicates of that paragraph.
+        for first, *copies in groups.values():
+            for copy in copies:
+                if first.index in output.spans:
+                    output.spans[copy.index] = list(output.spans[first.index])
+                if first.index in output.failed:
+                    output.failed.append(copy.index)
         return output
 
     async def _run_batch(self, batch: list[ParagraphJob], output: ProofreadOutput) -> None:
