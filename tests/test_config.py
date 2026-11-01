@@ -148,3 +148,24 @@ def test_output_cannot_be_input(xml_file):
 def test_bad_numbers(xml_file, override):
     with pytest.raises(ConfigError):
         make_settings(xml_file, **override)
+
+
+# --- requests per minute ------------------------------------------------------------
+
+
+def test_rpm_defaults_to_no_limit(xml_file, monkeypatch):
+    monkeypatch.delenv("PROOFREAD_RPM", raising=False)
+    assert make_settings(xml_file).requests_per_minute is None
+
+
+def test_rpm_from_flag_and_env(xml_file, monkeypatch):
+    monkeypatch.setenv("PROOFREAD_RPM", "15")
+    assert make_settings(xml_file).requests_per_minute == 15
+    assert make_settings(xml_file, requests_per_minute=30).requests_per_minute == 30
+
+
+@pytest.mark.parametrize("bad", ["0", "-5", "fast"])
+def test_bad_rpm_is_rejected(xml_file, monkeypatch, bad):
+    monkeypatch.setenv("PROOFREAD_RPM", bad)
+    with pytest.raises(ConfigError):
+        make_settings(xml_file)

@@ -27,6 +27,7 @@ class FakeLLM:
         fail: bool = False,
         delay: float = 0.0,
         skip: set[str] | None = None,
+        error: Exception | None = None,
     ):
         self.answers = answers or {}
         self.fail = fail
@@ -35,6 +36,7 @@ class FakeLLM:
         self.calls: list[list[str]] = []  # paragraph texts sent in each call
         self.in_flight = 0  # calls running right now
         self.max_in_flight = 0  # most calls that ever ran at the same time
+        self.error = error  # what to raise when fail=True (default: ConnectionError)
 
     def invoke(self, messages) -> ProofreadResponse:
         found = [
@@ -43,7 +45,7 @@ class FakeLLM:
         ]
         self.calls.append([text for _, text in found])
         if self.fail:
-            raise ConnectionError("model unreachable")
+            raise self.error or ConnectionError("model unreachable")
 
         paragraphs = []
         for pid, text in found:

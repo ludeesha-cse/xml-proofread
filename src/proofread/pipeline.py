@@ -112,6 +112,14 @@ def run(settings: Settings, llm: Runnable | None = None) -> RunResult:
         if jobs:  # nothing to check means no model is needed (no API key, no Ollama)
             found = _proofread(settings, llm, jobs, token_counter)
 
+    if found.rate_limited:
+        logger.warning(
+            "%d request(s) were refused by the provider's rate limit. Slow down with "
+            "--rpm (e.g. --rpm 15 on Gemini's free tier) or send fewer, larger batches "
+            "with --batch-size.",
+            found.rate_limited,
+        )
+
     if jobs and len(found.failed) == len(jobs):
         # Nothing worked at all: almost certainly a setup problem (Ollama not running,
         # wrong model name, bad API key). Fail loudly instead of writing an unchanged copy.

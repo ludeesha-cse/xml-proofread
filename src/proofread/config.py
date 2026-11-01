@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 #   Local: ollama:qwen3:8b
 DEFAULT_MODEL = "google_genai:gemini-3.6-flash"
 MODEL_ENV_VAR = "PROOFREAD_MODEL"  # lets .env choose the model without a flag
+RPM_ENV_VAR = "PROOFREAD_RPM"
 
 OUTPUT_SUFFIX = ".corrected.xml"
 
@@ -53,6 +54,7 @@ class Settings:
     max_retries: int
     timeout_s: float  # seconds before one request gives up
     strict: bool  # does we fail the whole run if any paragraph fails
+    requests_per_minute: float | None = None  # client-side rate limit; None = unlimited
 
     @property
     def model(self) -> str:
@@ -121,6 +123,17 @@ def require_api_key(provider: str) -> None:
         )
 
 
+def _float_from_env(name: str) -> float | None:
+    """Read a number from an environment variable, or None if it isn't set."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise ConfigError(f"{name}={raw!r} is not a number.") from exc
+
+
 def build_settings(
     *,  # the "*" forces keyword arguments, so values can't be passed in the wrong order
     input_path: Path,
@@ -132,6 +145,7 @@ def build_settings(
     max_retries: int,
     timeout_s: float,
     strict: bool,
+    requests_per_minute: float | None = None,
 ) -> Settings:
     """Check raw CLI values and return a Settings object, or raise a ProofreadError."""
     # Factory + Fail-Fast validation.
@@ -150,6 +164,10 @@ def build_settings(
         raise ConfigError("--max-retries must be 0 or more.")
     if timeout_s <= 0:
         raise ConfigError("--timeout must be greater than 0.")
+    # "is None", not "or": an explicit 0 must be rejected, not silently ignored.
+    rpm = requests_per_minute if requests_per_minute is not None else _float_from_env(RPM_ENV_VAR)
+    if rpm is not None and rpm <= 0:
+        raise ConfigError("--rpm must be greater than 0.")
 
     # 3. Language.
     lang_tag, language_name = normalize_lang(lang)
@@ -174,4 +192,5 @@ def build_settings(
         max_retries=max_retries,
         timeout_s=timeout_s,
         strict=strict,
+        requests_per_minute=rpm,
     )

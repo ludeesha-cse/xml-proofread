@@ -21,6 +21,7 @@ from proofread.llm import (
     OLLAMA_MIN_CONTEXT,
     build_structured_llm,
     create_chat_model,
+    is_rate_limited,
     is_retryable,
     model_kwargs,
     ollama_context_size,
@@ -162,3 +163,31 @@ def test_permanent_errors_are_not_retried(settings_for, monkeypatch):
     with pytest.raises(ModelNotFoundError):
         llm.invoke("hi")
     assert len(calls) == 1  # failed at once, no retries
+
+
+# --- rate limiting -------------------------------------------------------------------
+
+
+def test_rpm_adds_a_rate_limiter(settings_for):
+    model = create_chat_model(settings_for("google_genai:gemini-3.6-flash", requests_per_minute=15))
+    assert model.rate_limiter is not None
+    assert model.rate_limiter.requests_per_second == 15 / 60
+
+
+def test_no_rate_limiter_by_default(settings_for, monkeypatch):
+    monkeypatch.delenv("PROOFREAD_RPM", raising=False)
+    model = create_chat_model(settings_for("ollama:qwen3:8b"))
+    assert model.rate_limiter is None
+
+
+@pytest.mark.parametrize(
+    ("exc", "expected"),
+    [
+        (ModelRateLimitError("429"), True),
+        (ollama.ResponseError("too many requests", 429), True),
+        (ModelTimeoutError("slow"), False),
+        (ValueError("bug"), False),
+    ],
+)
+def test_is_rate_limited(exc, expected):
+    assert is_rate_limited(exc) is expected

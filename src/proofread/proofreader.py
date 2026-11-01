@@ -12,6 +12,7 @@ from langchain_core.runnables import Runnable
 from lxml import etree
 
 from proofread.exceptions import LLMError
+from proofread.llm import is_rate_limited
 from proofread.models import ErrorSpan
 from proofread.paragraph import contains_cdata, has_error_tags, text_slots
 from proofread.prompts import build_messages
@@ -39,7 +40,18 @@ class ProofreadOutput:
     failed: list[int] = field(default_factory=list)  # paragraphs whose request failed
     requests: int = 0  # LLM requests made (not counting retries)
     first_error: str | None = None  # why the first failed request failed, for messages
+    rate_limited: int = 0  # requests refused because we sent too many (HTTP 429)
     duplicates: int = 0  # paragraphs not sent because an identical one was
+
+
+def short_error(exc: BaseException, limit: int = 160) -> str:
+    """One readable line for logs: "TypeName: start of the message…".
+
+    Provider errors can be thousands of characters of JSON. The full error is still
+    logged with --verbose.
+    """
+    text = f"{type(exc).__name__}: {str(exc).splitlines()[0] if str(exc) else ''}"
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def make_job(index: int, p: etree._Element) -> ParagraphJob | None:
@@ -186,11 +198,16 @@ class Proofreader:
             )
         except Exception as exc:
             indexes = [job.index for job in batch]
+            reason = short_error(exc)
             if self._strict:
-                raise LLMError(f"LLM request failed for paragraphs {indexes}: {exc}") from exc
-            logger.warning("LLM request failed; leaving paragraphs %s unchanged: %s", indexes, exc)
+                raise LLMError(f"LLM request failed for paragraphs {indexes}: {reason}") from exc
+            logger.warning(
+                "LLM request failed; leaving paragraphs %s unchanged: %s", indexes, reason
+            )
+            logger.debug("Full error: %r", exc)
             output.failed += indexes
-            output.first_error = output.first_error or f"{type(exc).__name__}: {exc}"
+            output.first_error = output.first_error or reason
+            output.rate_limited += is_rate_limited(exc)
             return
 
         # The prompt asks for every paragraph id. A missing one could mean "no errors"

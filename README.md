@@ -73,6 +73,7 @@ The output is written next to the input as `INPUT.corrected.xml`.
 | `--output`, `-o` | `INPUT.corrected.xml` | Output path |
 | `--batch-size` | `10` | Paragraphs per LLM request |
 | `--concurrency` | `4` | LLM requests in parallel |
+| `--rpm` | no limit | Max requests per minute (e.g. `15` for Gemini's free tier); also `PROOFREAD_RPM` |
 | `--max-retries` | `3` | Retries for errors that can go away (timeouts, rate limits, 5xx) |
 | `--timeout` | `60` | Seconds per request |
 | `--strict` | off | Fail the run if any paragraph can't be proofread |
@@ -281,6 +282,17 @@ So 3.6 Flash's only "mistakes" on this sample are the reference's.
   itself is small in comparison.
 - **Ollama:** the context window grows with `--batch-size`, because Ollama silently cuts off
   prompts that don't fit.
+- **Rate limits:** Gemini's free tier allows 15 requests per minute. Without a limit, a
+  300-paragraph file sent 8 requests at once and half of them were refused (HTTP 429).
+  `--rpm 15` spaces requests evenly so none are refused; larger batches mean fewer requests.
+
+### Rate-limit comparison
+
+| Run | Requests | Failed | Time |
+|---|---|---|---|
+| `--concurrency 1` (no limit) | 30 | 10 | 95 s |
+| `--concurrency 8` (no limit) | 30 | 150 | 28 s |
+| `--rpm 15 --batch-size 25` | 12 | expect 0 | expect about 50 s |
 
 Timings depend on the network and the provider's load on the day; token counts are the
 stable measure of work.

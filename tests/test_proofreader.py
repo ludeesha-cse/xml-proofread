@@ -3,10 +3,11 @@
 import asyncio
 
 import pytest
+from langchain_core.exceptions import ModelRateLimitError
 from lxml import etree
 
 from proofread.exceptions import LLMError
-from proofread.proofreader import ParagraphJob, Proofreader, make_job, to_error_span
+from proofread.proofreader import ParagraphJob, Proofreader, make_job, short_error, to_error_span
 from proofread.schema import FoundError
 from proofread.tokenizer import tokenize
 
@@ -182,3 +183,18 @@ def test_identical_paragraphs_are_sent_once(fake_llm):
 def test_failure_is_copied_to_duplicates(fake_llm):
     output = proofread(fake_llm(fail=True), [job("a b", index=0), job("a b", index=5)])
     assert sorted(output.failed) == [0, 5]
+
+
+def test_short_error_keeps_logs_readable():
+    huge = ModelRateLimitError("429 RESOURCE_EXHAUSTED. " + "{'details': 'x'} " * 200)
+    text = short_error(huge)
+    assert text.startswith("ModelRateLimitError: 429 RESOURCE_EXHAUSTED.")
+    assert len(text) <= 160 and text.endswith("…")
+    assert short_error(ValueError("short")) == "ValueError: short"
+
+
+def test_rate_limited_requests_are_counted(fake_llm):
+    llm = fake_llm(fail=True, error=ModelRateLimitError("429"))
+    output = proofread(llm, [job("a b", index=0), job("c d", index=1)], batch_size=1)
+    assert output.rate_limited == 2
+    assert output.first_error == "ModelRateLimitError: 429"

@@ -88,3 +88,8 @@ def test_malformed_xml_exit_code(tmp_path):
     src.write_text("<r><p>unclosed</r>")
     assert runner.invoke(app, [str(src)]).exit_code == 3
     assert not (tmp_path / "bad.corrected.xml").exists()
+
+
+def test_rpm_option(xml_file):
+    assert runner.invoke(app, [str(xml_file), "--rpm", "15"]).exit_code == 0
+    assert runner.invoke(app, [str(xml_file), "--rpm", "0"]).exit_code == 2

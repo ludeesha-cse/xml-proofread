@@ -79,6 +79,15 @@ def run(
     concurrency: Annotated[int, typer.Option(help="Parallel LLM requests.")] = 4,
     max_retries: Annotated[int, typer.Option(help="Retries per failed LLM request.")] = 3,
     timeout: Annotated[float, typer.Option(help="Seconds before an LLM request times out.")] = 60.0,
+    rpm: Annotated[
+        float | None,
+        typer.Option(
+            "--rpm",
+            help="Max LLM requests per minute (e.g. 15 for Gemini's free tier). "
+            "Falls back to $PROOFREAD_RPM; default: no limit.",
+            show_default=False,
+        ),
+    ] = None,
     strict: Annotated[
         bool, typer.Option(help="Fail the run if any paragraph cannot be proofread.")
     ] = False,
@@ -111,6 +120,7 @@ def run(
             max_retries=max_retries,
             timeout_s=timeout,
             strict=strict,
+            requests_per_minute=rpm,
         )
         require_api_key(settings.provider)
 

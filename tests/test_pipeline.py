@@ -118,3 +118,28 @@ def test_running_on_its_own_output_changes_nothing(sample_copy, fake_llm):
     second = run(settings_for(second_input), llm=fake_llm(SAMPLE_ANSWERS))
     assert second.output_path.read_bytes() == first.output_path.read_bytes()  # no nesting
     assert second.proofread == 1  # only the paragraph that had no errors was sent again
+
+
+def test_rate_limits_suggest_slowing_down(tmp_path, fake_llm, caplog):
+    from langchain_core.exceptions import ModelRateLimitError
+
+    src = tmp_path / "in.xml"
+    src.write_bytes(b"<r><p>One.</p><p>Two.</p></r>")
+    calls = []
+
+    class SometimesLimited:
+        """Answers the first request, refuses the second with a 429."""
+
+        def __init__(self):
+            self.inner = fake_llm({})
+
+        async def ainvoke(self, messages, config=None):
+            calls.append(1)
+            if len(calls) == 2:
+                raise ModelRateLimitError("429 RESOURCE_EXHAUSTED")
+            return await self.inner.ainvoke(messages)
+
+    result = run(settings_for(src, batch_size=1, concurrency=1), llm=SometimesLimited())
+    assert result.failed == 1
+    assert "refused by the provider's rate limit" in caplog.text
+    assert "--rpm" in caplog.text
