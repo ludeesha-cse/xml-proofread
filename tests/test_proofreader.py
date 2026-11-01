@@ -114,3 +114,16 @@ def test_works_with_a_langchain_runnable(fake_llm):
     llm = fake_llm({"i agree.": [(0, 0, "capitalization", "I")]})
     output = proofreader(llm.as_runnable()).proofread([job("i agree.")])
     assert output.spans[0][0].correction == "I"
+
+
+def test_skipped_paragraph_is_marked_failed(fake_llm):
+    llm = fake_llm({"i agree.": [(0, 0, "capitalization", "I")]}, skip={"Other."})
+    output = proofreader(llm).proofread([job("i agree.", index=0), job("Other.", index=1)])
+    assert output.failed == [1]  # the skipped one
+    assert output.spans[0][0].correction == "I"  # the returned one is still used
+
+
+def test_skipped_paragraph_in_strict_mode_raises(fake_llm):
+    llm = fake_llm(skip={"Other."})
+    with pytest.raises(LLMError, match="skipped paragraphs"):
+        proofreader(llm, strict=True).proofread([job("Fine.", index=0), job("Other.", index=1)])

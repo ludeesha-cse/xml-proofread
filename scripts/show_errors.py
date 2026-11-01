@@ -13,8 +13,7 @@ doc = load_xml(Path(sys.argv[1]))
 for n, p in enumerate(find_paragraphs(doc.root)):
     # Only this paragraph's own <error> tags, not those of a nested <p>.
     errors = [
-        e for e in p.iter("{*}error")
-        if next(a for a in e.iterancestors() if is_paragraph(a)) is p
+        e for e in p.iter("{*}error") if next(a for a in e.iterancestors() if is_paragraph(a)) is p
     ]
     print(f"[{p.get('id') or n}]", "no errors" if not errors else "")
     for e in errors:

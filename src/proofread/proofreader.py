@@ -125,6 +125,16 @@ class Proofreader:
             output.failed += indexes
             return
 
+        # The prompt asks for every paragraph id. A missing one could mean "no errors"
+        # or "forgot it", and we can't tell which, so treat it as not proofread.
+        returned = {answer.id for answer in response.paragraphs}
+        missing = [job.index for i, job in enumerate(batch) if i not in returned]
+        if missing:
+            if self._strict:
+                raise LLMError(f"The model skipped paragraphs {missing}")
+            logger.warning("The model skipped paragraphs %s; leaving them unchanged", missing)
+            output.failed += missing
+
         for answer in response.paragraphs:
             if not 0 <= answer.id < len(batch):
                 logger.debug("Ignoring answer for unknown paragraph id %d", answer.id)

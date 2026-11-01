@@ -20,9 +20,15 @@ class FakeLLM:
 
     _PARAGRAPH_RE = re.compile(r'<paragraph id="(\d+)">\ntext: (".*")\n')
 
-    def __init__(self, answers: dict[str, list[tuple]] | None = None, fail: bool = False):
+    def __init__(
+        self,
+        answers: dict[str, list[tuple]] | None = None,
+        fail: bool = False,
+        skip: set[str] | None = None,
+    ):
         self.answers = answers or {}
         self.fail = fail
+        self.skip = skip or set()  # paragraph texts to leave out of the answer
         self.calls: list[list[str]] = []  # paragraph texts sent in each call
 
     def invoke(self, messages) -> ProofreadResponse:
@@ -36,6 +42,8 @@ class FakeLLM:
 
         paragraphs = []
         for pid, text in found:
+            if text in self.skip:
+                continue  # simulate a model that forgets a paragraph
             tokens = tokenize([text])
             errors = [
                 FoundError(
