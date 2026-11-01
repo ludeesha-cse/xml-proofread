@@ -4,6 +4,7 @@ The CLI calls run(). Keeping the flow here, not in cli.py, means tests can run t
 whole pipeline directly, with a fake LLM instead of a real one.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,9 +47,11 @@ def run(settings: Settings, llm: Runnable | None = None) -> RunResult:
         language=settings.language_name,
         lang=settings.lang,
         batch_size=settings.batch_size,
+        concurrency=settings.concurrency,
         strict=settings.strict,
     )
-    found = proofreader.proofread(jobs)
+    found = asyncio.run(proofreader.proofread(jobs))
+
     if jobs and len(found.failed) == len(jobs):
         # Nothing worked at all: almost certainly a setup problem (Ollama not running,
         # wrong model name, bad API key). Fail loudly instead of writing an unchanged copy.

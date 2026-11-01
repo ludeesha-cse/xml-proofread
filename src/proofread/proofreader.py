@@ -4,6 +4,7 @@ The model answers in token numbers. This module checks those numbers against the
 tokens we sent, converts them to character positions, and handles failed requests.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 
@@ -36,6 +37,8 @@ class ProofreadOutput:
     spans: dict[int, list[ErrorSpan]] = field(default_factory=dict)
     dropped: int = 0  # suggestions we could not map to the text
     failed: list[int] = field(default_factory=list)  # paragraphs whose request failed
+    requests: int = 0  # LLM requests made (not counting retries)
+    duplicates: int = 0  # paragraphs not sent because an identical one was
 
 
 def make_job(index: int, p: etree._Element) -> ParagraphJob | None:
@@ -94,29 +97,50 @@ def to_error_span(job: ParagraphJob, found: FoundError) -> ErrorSpan:
 
 
 class Proofreader:
-    """Runs batches of ParagraphJobs through a structured-output LLM."""
+    """Runs batches of ParagraphJobs through a structured-output LLM, in parallel."""
 
     def __init__(
-        self, llm: Runnable, *, language: str, lang: str, batch_size: int, strict: bool
+        self,
+        llm: Runnable,
+        *,
+        language: str,
+        lang: str,
+        batch_size: int,
+        concurrency: int,
+        strict: bool,
+        callbacks: list | None = None,
     ) -> None:
         self._llm = llm  # returns a ProofreadResponse (see llm.build_structured_llm)
         self._language = language
         self._lang = lang
         self._batch_size = batch_size
+        self._concurrency = concurrency
         self._strict = strict
+        self._callbacks = callbacks or []  # e.g. a token-usage counter
 
-    def proofread(self, jobs: list[ParagraphJob]) -> ProofreadOutput:
+    async def proofread(self, jobs: list[ParagraphJob]) -> ProofreadOutput:
         output = ProofreadOutput()
-        for i in range(0, len(jobs), self._batch_size):
-            self._run_batch(jobs[i : i + self._batch_size], output)
+
+        # Run the batches in parallel, but never more than `concurrency` at once.
+        batches = [jobs[i : i + self._batch_size] for i in range(0, len(jobs), self._batch_size)]
+        semaphore = asyncio.Semaphore(self._concurrency)
+
+        async def run_limited(batch: list[ParagraphJob]) -> None:
+            async with semaphore:
+                await self._run_batch(batch, output)
+
+        await asyncio.gather(*(run_limited(batch) for batch in batches))
         return output
 
-    def _run_batch(self, batch: list[ParagraphJob], output: ProofreadOutput) -> None:
+    async def _run_batch(self, batch: list[ParagraphJob], output: ProofreadOutput) -> None:
         messages = build_messages(
             self._language, self._lang, [(job.text, job.tokens) for job in batch]
         )
+        output.requests += 1
         try:
-            response: ProofreadResponse = self._llm.invoke(messages)
+            response: ProofreadResponse = await self._llm.ainvoke(
+                messages, config={"callbacks": self._callbacks}
+            )
         except Exception as exc:
             indexes = [job.index for job in batch]
             if self._strict:

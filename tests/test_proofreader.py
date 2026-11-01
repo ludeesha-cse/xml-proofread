@@ -1,5 +1,7 @@
 """Tests for proofreader.py, using the FakeLLM from conftest.py."""
 
+import asyncio
+
 import pytest
 from lxml import etree
 
@@ -19,8 +21,13 @@ def found(first, last, original, correction="X", type="grammar") -> FoundError:
     )
 
 
-def proofreader(llm, batch_size=10, strict=False) -> Proofreader:
-    return Proofreader(llm, language="English", lang="en", batch_size=batch_size, strict=strict)
+def proofread(llm, jobs, batch_size=10, concurrency=4, strict=False):
+    """Run Proofreader.proofread (async) and return its output."""
+    proofreader = Proofreader(
+        llm, language="English", lang="en", batch_size=batch_size,
+        concurrency=concurrency, strict=strict,
+    )  # fmt: skip
+    return asyncio.run(proofreader.proofread(jobs))
 
 
 # --- make_job -------------------------------------------------------------------------
@@ -79,7 +86,7 @@ def test_to_error_span_rejects_out_of_range_tokens():
 def test_finds_errors_and_maps_them_to_paragraph_indexes(fake_llm):
     llm = fake_llm({"My name is john.": [(6, 6, "capitalization", "John")]})
     jobs = [job("Fine text.", index=0), job("My name is john.", index=3)]
-    output = proofreader(llm).proofread(jobs)
+    output = proofread(llm, jobs)
     assert list(output.spans) == [3]
     assert output.spans[3][0].correction == "John"
     assert output.failed == [] and output.dropped == 0
@@ -88,37 +95,37 @@ def test_finds_errors_and_maps_them_to_paragraph_indexes(fake_llm):
 def test_paragraphs_are_sent_in_batches(fake_llm):
     llm = fake_llm()
     jobs = [job(f"Text {i}.", index=i) for i in range(5)]
-    proofreader(llm, batch_size=2).proofread(jobs)
+    proofread(llm, jobs, batch_size=2)
     assert [len(call) for call in llm.calls] == [2, 2, 1]
 
 
 def test_failed_request_leaves_paragraphs_unchanged(fake_llm):
-    output = proofreader(fake_llm(fail=True)).proofread([job("a b", index=4)])
+    output = proofread(fake_llm(fail=True), [job("a b", index=4)])
     assert output.failed == [4]
     assert output.spans == {}
 
 
 def test_failed_request_in_strict_mode_raises(fake_llm):
     with pytest.raises(LLMError):
-        proofreader(fake_llm(fail=True), strict=True).proofread([job("a b")])
+        proofread(fake_llm(fail=True), [job("a b")], strict=True)
 
 
 def test_unusable_suggestions_are_counted(fake_llm):
     llm = fake_llm({"a b": [(0, 99, "grammar", "X")]})  # token 99 doesn't exist
-    output = proofreader(llm).proofread([job("a b")])
+    output = proofread(llm, [job("a b")])
     assert output.dropped == 1
     assert output.spans == {}
 
 
 def test_works_with_a_langchain_runnable(fake_llm):
     llm = fake_llm({"i agree.": [(0, 0, "capitalization", "I")]})
-    output = proofreader(llm.as_runnable()).proofread([job("i agree.")])
+    output = proofread(llm.as_runnable(), [job("i agree.")])
     assert output.spans[0][0].correction == "I"
 
 
 def test_skipped_paragraph_is_marked_failed(fake_llm):
     llm = fake_llm({"i agree.": [(0, 0, "capitalization", "I")]}, skip={"Other."})
-    output = proofreader(llm).proofread([job("i agree.", index=0), job("Other.", index=1)])
+    output = proofread(llm, [job("i agree.", index=0), job("Other.", index=1)])
     assert output.failed == [1]  # the skipped one
     assert output.spans[0][0].correction == "I"  # the returned one is still used
 
@@ -126,4 +133,18 @@ def test_skipped_paragraph_is_marked_failed(fake_llm):
 def test_skipped_paragraph_in_strict_mode_raises(fake_llm):
     llm = fake_llm(skip={"Other."})
     with pytest.raises(LLMError, match="skipped paragraphs"):
-        proofreader(llm, strict=True).proofread([job("Fine.", index=0), job("Other.", index=1)])
+        proofread(llm, [job("Fine.", index=0), job("Other.", index=1)], strict=True)
+
+
+def test_requests_run_in_parallel_up_to_the_limit(fake_llm):
+    llm = fake_llm(delay=0.05)
+    jobs = [job(f"Text {i}.", index=i) for i in range(10)]
+    output = proofread(llm, jobs, batch_size=1, concurrency=3)
+    assert output.requests == 10
+    assert llm.max_in_flight == 3  # parallel, but never more than --concurrency
+
+
+def test_concurrency_one_runs_requests_one_at_a_time(fake_llm):
+    llm = fake_llm(delay=0.01)
+    proofread(llm, [job(f"T{i}.", index=i) for i in range(4)], batch_size=1, concurrency=1)
+    assert llm.max_in_flight == 1

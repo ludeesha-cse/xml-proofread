@@ -117,4 +117,3 @@ def test_permanent_errors_are_not_retried(settings_for, monkeypatch):
     with pytest.raises(ModelNotFoundError):
         llm.invoke("hi")
     assert len(calls) == 1  # failed at once, no retries
-    
