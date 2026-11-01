@@ -1088,6 +1088,7 @@ name = "proofread"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-google-genai" },
     { name = "langchain-ollama" },
@@ -1107,6 +1108,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=0.3.0" },
     { name = "langchain-google-genai", specifier = ">=2.0.0" },
     { name = "langchain-ollama", specifier = ">=0.2.0" },

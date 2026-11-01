@@ -2,7 +2,17 @@
 
 from pathlib import Path
 
+import httpx
+import ollama
 import pytest
+from langchain_core.exceptions import (
+    ModelAuthenticationError,
+    ModelNotFoundError,
+    ModelRateLimitError,
+    ModelTimeoutError,
+    OutputParserException,
+)
+from langchain_core.runnables import RunnableLambda
 
 from proofread.config import build_settings
 from proofread.exceptions import ConfigError
@@ -10,6 +20,7 @@ from proofread.llm import (
     OLLAMA_CONTEXT_TOKENS,
     build_structured_llm,
     create_chat_model,
+    is_retryable,
     model_kwargs,
 )
 
@@ -67,3 +78,43 @@ def test_missing_provider_package_gives_install_hint(settings_for, monkeypatch):
     monkeypatch.setattr("proofread.llm.init_chat_model", missing_package)
     with pytest.raises(ConfigError, match="uv add langchain-ollama"):
         create_chat_model(settings_for("ollama:qwen3:8b"))
+
+
+# --- is_retryable -----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("exc", "expected"),
+    [
+        (ModelRateLimitError("429"), True),
+        (ModelTimeoutError("slow"), True),
+        (ModelNotFoundError("404"), False),
+        (ModelAuthenticationError("401"), False),
+        (ollama.ResponseError("model 'x' not found", 404), False),
+        (ollama.ResponseError("overloaded", 503), True),
+        (httpx.ConnectError("refused"), True),
+        (httpx.ReadTimeout("slow"), True),
+        (TimeoutError(), True),
+        (OutputParserException("bad json"), True),
+        (ValueError("a bug"), False),
+    ],
+)
+def test_is_retryable(exc, expected):
+    assert is_retryable(exc) is expected
+
+
+def test_permanent_errors_are_not_retried(settings_for, monkeypatch):
+    calls = []
+
+    def always_404(_):
+        calls.append(1)
+        raise ModelNotFoundError("model not found")
+
+    settings = settings_for("ollama:qwen3:8b", max_retries=3)
+    fake_model = RunnableLambda(always_404)
+    fake_model.with_structured_output = lambda *a, **k: fake_model  # skip the real wrapper
+    llm = build_structured_llm(fake_model, settings)
+    with pytest.raises(ModelNotFoundError):
+        llm.invoke("hi")
+    assert len(calls) == 1  # failed at once, no retries
+    

@@ -7,9 +7,12 @@ whether it is Gemini in the cloud or Ollama on this machine.
 import logging
 from typing import Any
 
+import httpx
 from langchain.chat_models import init_chat_model
+from langchain_core.exceptions import ModelError, OutputParserException
 from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import Runnable
+from pydantic import ValidationError
 
 from proofread.config import Settings
 from proofread.exceptions import ConfigError
@@ -66,14 +69,44 @@ def create_chat_model(settings: Settings) -> BaseChatModel:
         raise ConfigError(f"Cannot create model '{settings.model}': {exc}") from exc
 
 
+def is_retryable(exc: BaseException) -> bool:
+    """True if trying the same request again might succeed.
+
+    Retry: rate limits (429), server errors (5xx), timeouts, connection problems and
+    invalid model output. Don't retry: wrong model name (404), bad API key (401/403) or
+    a rejected request (400), which fail the same way every time.
+    """
+    # 1. LangChain's standard errors say it themselves (Gemini raises these).
+    if isinstance(exc, ModelError):
+        return exc.is_retryable
+    # 2. Errors that carry an HTTP status code (e.g. Ollama's ResponseError).
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int) and status > 0:
+        return status in (408, 429) or status >= 500
+    # 3. Network trouble, or output that didn't match our schema.
+    return isinstance(
+        exc,
+        (
+            TimeoutError,
+            ConnectionError,
+            httpx.TransportError,  # covers connect errors and timeouts
+            OutputParserException,
+            ValidationError,
+        ),
+    )
+
+
 def build_structured_llm(model: BaseChatModel, settings: Settings) -> Runnable:
     """Wrap the model so it returns a ProofreadResponse, with retries.
 
     with_structured_output: the model must answer in our schema (JSON schema mode).
-    with_retry: on any error (network, timeout, invalid output) wait a little, with
-    growing delays, and try again, up to max_retries extra times.
+    with_retry: if the error is one that can go away (see is_retryable), wait a
+    little, with growing delays, and try again, up to max_retries extra times.
     """
     structured = model.with_structured_output(ProofreadResponse, method="json_schema")
     if settings.max_retries == 0:
         return structured
-    return structured.with_retry(stop_after_attempt=settings.max_retries + 1)
+    return structured.with_retry(
+        retry_if_exception_type=is_retryable,
+        stop_after_attempt=settings.max_retries + 1,
+    )
