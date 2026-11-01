@@ -67,6 +67,27 @@ def _find_tokens(tokens: list[Token], original: str) -> tuple[int, int] | None:
     return matches[0] if len(matches) == 1 else None
 
 
+# Punctuation that never has a space before it (also true in French, unlike ; : ! ?).
+_NO_SPACE_BEFORE = (",", ".")
+
+
+def _fix_space_before_punctuation(text: str, start: int, correction: str) -> tuple[int, str]:
+    """Repair a common model slip that would put a space before a comma.
+
+    For "galleries and" the model should select the space and correct it to ", ".
+    Sometimes it selects "and" and corrects it to ", and" instead, which leaves the
+    space in front: "galleries , and". If a correction starts with a comma or period,
+    we drop any leading whitespace from it and widen the span to swallow the
+    whitespace before it, giving "galleries, and".
+    """
+    stripped = correction.lstrip()
+    if not stripped.startswith(_NO_SPACE_BEFORE):
+        return start, correction
+    while start > 0 and text[start - 1].isspace():
+        start -= 1
+    return start, stripped
+
+
 def to_error_span(job: ParagraphJob, found: FoundError) -> ErrorSpan:
     """Convert one model suggestion into an ErrorSpan. Raises ValueError if impossible.
 
@@ -87,11 +108,12 @@ def to_error_span(job: ParagraphJob, found: FoundError) -> ErrorSpan:
         first, last = fixed
 
     start, end = token_range_to_chars(job.tokens, first, last)
+    start, correction = _fix_space_before_punctuation(job.text, start, found.correction)
     return ErrorSpan(
         start=start,
         end=end,
         type=found.type,
-        correction=found.correction,
+        correction=correction,
         reason=getattr(found, "reason", None),  # only present if the extra credit is on
     )
 

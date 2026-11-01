@@ -80,6 +80,26 @@ def test_to_error_span_rejects_out_of_range_tokens():
         to_error_span(job("a b"), found(7, 9, "a b c"))
 
 
+@pytest.mark.parametrize(
+    ("text", "first", "last", "original", "correction", "fixed"),
+    [
+        # comma put on the next word: "galleries , and" -> "galleries, and"
+        ("the galleries and the food", 4, 4, "and", ", and", "the galleries, and the food"),
+        # space selected, but the correction keeps a space before the comma
+        ("work hard but sad", 3, 3, " ", " , ", "work hard, but sad"),
+        # combined fix put on the second word: "Paris , France" -> "Paris, France"
+        ("Paris france.", 2, 2, "france", ", France", "Paris, France."),
+        # correct selections are left alone
+        ("eggs toast", 1, 1, " ", ", ", "eggs, toast"),
+        ("ok?", 1, 1, "?", ".", "ok."),
+        ("However it", 0, 0, "However", "However,", "However, it"),
+    ],
+)
+def test_no_space_is_left_before_a_comma_or_period(text, first, last, original, correction, fixed):
+    span = to_error_span(job(text), found(first, last, original, correction))
+    assert text[: span.start] + span.correction + text[span.end :] == fixed
+
+
 # --- Proofreader ----------------------------------------------------------------------
 
 

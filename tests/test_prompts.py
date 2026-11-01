@@ -1,9 +1,18 @@
 """Tests for prompts.py."""
 
+import re
 from pathlib import Path
 
-from proofread.prompts import EXAMPLES, build_messages, format_paragraph, system_prompt
+from proofread.paragraph import paragraph_text
+from proofread.prompts import (
+    EXAMPLES,
+    build_messages,
+    format_paragraph,
+    style_rules,
+    system_prompt,
+)
 from proofread.tokenizer import tokenize
+from proofread.xml_io import find_paragraphs, load_xml
 
 
 def test_system_prompt_names_the_language():
@@ -31,11 +40,22 @@ def test_prompt_examples_produce_correct_sentences():
     assert [apply_corrections(text, errors) for text, errors in EXAMPLES] == expected
 
 
-def test_prompt_examples_are_not_taken_from_the_sample():
-    # The sample file is our test set; showing it to the model would inflate results.
-    sample = (Path(__file__).parent.parent / "samples" / "input.xml").read_text()
-    for text, _ in EXAMPLES:
-        assert text not in sample
+def three_word_sequences(text: str) -> set[tuple[str, ...]]:
+    """Every run of three consecutive words, lowercased, ignoring punctuation."""
+    words = re.findall(r"\w+", text.lower())
+    return {tuple(words[i : i + 3]) for i in range(len(words) - 2)}
+
+
+def test_prompt_does_not_contain_sample_text():
+    # The sample file is our test set; showing any of it to the model (in an example
+    # or a style rule) would inflate the results. Three-word overlaps catch copied
+    # phrases; shorter ones ("the food") are too common to mean anything.
+    sample = load_xml(Path(__file__).parent.parent / "samples" / "input.xml")
+    sample_sequences = set().union(
+        *(three_word_sequences(paragraph_text(p)) for p in find_paragraphs(sample.root))
+    )
+    prompt = system_prompt("English", "en")
+    assert three_word_sequences(prompt) & sample_sequences == set()
 
 
 def test_system_prompt_contains_the_rendered_examples():
@@ -75,3 +95,23 @@ def test_build_messages_numbers_paragraphs_in_order():
     assert system.type == "system" and human.type == "human"
     assert '<paragraph id="0">\ntext: "One."' in human.content
     assert '<paragraph id="1">\ntext: "Two."' in human.content
+
+
+def test_english_gets_the_house_style():
+    for lang in ("en", "en-GB", "EN-us"):
+        assert "Oxford" in style_rules("English", lang)
+    assert "serial (Oxford) comma" in system_prompt("English (United Kingdom)", "en-GB")
+
+
+def test_other_languages_get_their_own_conventions():
+    rules = style_rules("French", "fr")
+    assert "Oxford" not in rules
+    assert "standard punctuation conventions of French" in rules
+    assert "Oxford" not in system_prompt("French", "fr")
+
+
+def test_examples_follow_the_house_style():
+    # The worked examples must not contradict the style rules they sit next to.
+    corrected = [apply_corrections(text, errors) for text, errors in EXAMPLES]
+    assert "ready, and the team" in corrected[1]  # comma before "and" joining clauses
+    assert "tool, so we" in corrected[2]  # comma before "so" joining clauses

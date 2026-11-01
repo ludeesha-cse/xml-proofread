@@ -16,9 +16,9 @@ from proofread.config import Settings
 from proofread.exceptions import LLMError
 from proofread.injector import annotate_paragraph
 from proofread.llm import build_structured_llm, create_chat_model
-from proofread.proofreader import Proofreader, make_job
-from proofread.xml_io import find_paragraphs, load_xml, save_xml
 from proofread.metrics import Stopwatch, peak_memory_mb, token_totals
+from proofread.proofreader import Proofreader, ProofreadOutput, make_job
+from proofread.xml_io import find_paragraphs, load_xml, save_xml
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,22 @@ class RunResult:
     failed: int  # paragraphs left unchanged because the request failed
 
 
+async def close_model(model: object) -> None:
+    """Close the model's network connections while the event loop is still running.
+
+    Gemini's client closes its connections on the event loop it used. If that loop has
+    already finished (asyncio.run returned), Python later logs "Event loop is closed".
+    Models without aclose() (e.g. Ollama) need nothing.
+    """
+    aclose = getattr(model, "aclose", None)
+    if aclose is None:
+        return
+    try:
+        await aclose()
+    except Exception as exc:  # cleanup must never hide the real result
+        logger.debug("Closing the model failed: %s", exc)
+
+
 def run(settings: Settings, llm: Runnable | None = None) -> RunResult:
     """Proofread one file. Pass `llm` to use a fake model in tests."""
     stopwatch = Stopwatch()
@@ -53,8 +69,10 @@ def run(settings: Settings, llm: Runnable | None = None) -> RunResult:
         jobs = [job for i, p in enumerate(paragraphs) if (job := make_job(i, p))]
     logger.info("Found %d <p> element(s); %d need proofreading", len(paragraphs), len(jobs))
 
+    chat_model = None
     if llm is None:
-        llm = build_structured_llm(create_chat_model(settings), settings)
+        chat_model = create_chat_model(settings)
+        llm = build_structured_llm(chat_model, settings)
     token_counter = UsageMetadataCallbackHandler()  # LangChain adds up token usage here
     proofreader = Proofreader(
         llm,
@@ -65,8 +83,16 @@ def run(settings: Settings, llm: Runnable | None = None) -> RunResult:
         strict=settings.strict,
         callbacks=[token_counter],
     )
+
+    async def proofread_then_close() -> ProofreadOutput:
+        try:
+            return await proofreader.proofread(jobs)
+        finally:
+            await close_model(chat_model)
+
     with stopwatch.stage("proofread"):
-        found = asyncio.run(proofreader.proofread(jobs))
+        found = asyncio.run(proofread_then_close())
+
     if jobs and len(found.failed) == len(jobs):
         # Nothing worked at all: almost certainly a setup problem (Ollama not running,
         # wrong model name, bad API key). Fail loudly instead of writing an unchanged copy.

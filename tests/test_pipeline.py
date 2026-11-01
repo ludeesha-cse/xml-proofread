@@ -83,3 +83,16 @@ def test_pipeline_reports_timings_and_memory(sample_copy, fake_llm):
     assert result.total_seconds >= sum(result.stage_seconds.values())
     assert result.requests == 3  # 5 paragraphs, batch_size=2
     assert result.peak_memory_mb is None or result.peak_memory_mb > 0
+
+
+def test_pipeline_closes_the_model_before_the_event_loop_ends(sample_copy, fake_llm, monkeypatch):
+    events = []
+
+    class FakeChatModel:
+        async def aclose(self):
+            events.append("closed")  # an awaitable close, like Gemini's
+
+    monkeypatch.setattr("proofread.pipeline.create_chat_model", lambda s: FakeChatModel())
+    monkeypatch.setattr("proofread.pipeline.build_structured_llm", lambda m, s: fake_llm({}))
+    run(settings_for(sample_copy))
+    assert events == ["closed"]

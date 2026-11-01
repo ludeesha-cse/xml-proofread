@@ -36,7 +36,26 @@ EXAMPLES: list[tuple[str, list[tuple[int, int, str, str]]]] = [
     ),
 ]
 
-# $language, $lang and $examples are filled in per run. string.Template is used
+# House style, per language (the part of the tag before "-": "en-GB" -> "en").
+# Commas like these are conventions, not hard rules, so without them the model has to
+# guess. These follow the style of the assignment's expected output.
+STYLE_RULES = {
+    "en": """\
+- Use the serial (Oxford) comma in lists of three or more: "red, white, and blue".
+- Put a comma before and, but, or, so or yet when it joins two independent clauses.
+- Put a comma after an introductory word or phrase: "However, ...", "In the morning, ..."
+""",
+}
+DEFAULT_STYLE = "- Follow the standard punctuation conventions of $language.\n"
+
+
+def style_rules(language: str, lang: str) -> str:
+    """The house-style lines for this language, or a general fallback."""
+    rules = STYLE_RULES.get(lang.split("-")[0].lower(), DEFAULT_STYLE)
+    return Template(rules).substitute(language=language)
+
+
+# $language, $lang, $style and $examples are filled in per run. string.Template is used
 # instead of an f-string so the JSON in the examples can use { } freely.
 _SYSTEM_TEMPLATE = Template("""\
 You are a careful proofreader for $language text (language tag: $lang).
@@ -74,6 +93,8 @@ Rules:
    correct, with no missing, doubled or misplaced spaces or punctuation.
 10. Return an entry for every paragraph id you received.
 
+House style (report text that breaks these rules as a punctuation error):
+$style
 $examples""")
 
 
@@ -120,7 +141,12 @@ def _render_examples() -> str:
 
 
 def system_prompt(language: str, lang: str) -> str:
-    return _SYSTEM_TEMPLATE.substitute(language=language, lang=lang, examples=_render_examples())
+    return _SYSTEM_TEMPLATE.substitute(
+        language=language,
+        lang=lang,
+        style=style_rules(language, lang),
+        examples=_render_examples(),
+    )
 
 
 def build_messages(

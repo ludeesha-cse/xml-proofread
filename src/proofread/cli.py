@@ -11,8 +11,8 @@ from proofread import __version__
 from proofread.config import DEFAULT_MODEL, MODEL_ENV_VAR, build_settings, require_api_key
 from proofread.exceptions import ProofreadError
 from proofread.logging_setup import setup_logging
-from proofread.pipeline import run as run_pipeline
 from proofread.pipeline import RunResult
+from proofread.pipeline import run as run_pipeline
 
 logger = logging.getLogger("proofread")
 
