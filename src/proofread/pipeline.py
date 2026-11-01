@@ -17,9 +17,9 @@ from proofread.exceptions import LLMError
 from proofread.injector import annotate_paragraph
 from proofread.llm import build_structured_llm, create_chat_model
 from proofread.metrics import Stopwatch, peak_memory_mb, token_totals
+from proofread.paragraph import has_error_tags
 from proofread.proofreader import ParagraphJob, Proofreader, ProofreadOutput, make_job
 from proofread.xml_io import find_paragraphs, load_xml, save_xml
-from proofread.paragraph import has_error_tags
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,6 @@ def run(settings: Settings, llm: Runnable | None = None) -> RunResult:
             f"Every LLM request failed ({found.first_error}). "
             "Check the model name, the API key, or that Ollama is running."
         )
-    
 
     applied = 0
     rejected = found.dropped

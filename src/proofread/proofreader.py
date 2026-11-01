@@ -49,7 +49,7 @@ def make_job(index: int, p: etree._Element) -> ParagraphJob | None:
         return None
     if has_error_tags(p):
         logger.debug("Skipping paragraph %d: already has <error> tags", index)
-        return None    
+        return None
     pieces = [slot.value for slot in text_slots(p)]
     text = "".join(pieces)
     if not any(ch.isalpha() for ch in text):

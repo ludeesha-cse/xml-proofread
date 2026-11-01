@@ -54,7 +54,9 @@ def test_latin1_file_gets_errors_in_its_own_encoding(tmp_path, fake_llm):
 
 
 def test_entity_references_survive(tmp_path, fake_llm):
-    data = b'<?xml version="1.0"?>\n<!DOCTYPE r [<!ENTITY co "Acme">]>\n<r><p>&co; is grate.</p></r>'
+    data = (
+        b'<?xml version="1.0"?>\n<!DOCTYPE r [<!ENTITY co "Acme">]>\n<r><p>&co; is grate.</p></r>'
+    )
     llm = fake_llm({" is grate.": [(3, 3, "spelling", "great")]})
     _, out = proofread_bytes(tmp_path, data, llm)
     assert b'<p>&co; is <error type="spelling" correction="great">grate</error>.</p>' in out

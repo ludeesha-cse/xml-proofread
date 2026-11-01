@@ -19,11 +19,11 @@ from proofread.exceptions import ConfigError
 from proofread.llm import (
     OLLAMA_MAX_CONTEXT,
     OLLAMA_MIN_CONTEXT,
-    ollama_context_size,
     build_structured_llm,
     create_chat_model,
     is_retryable,
     model_kwargs,
+    ollama_context_size,
 )
 
 
@@ -102,7 +102,7 @@ def test_too_large_batch_for_ollama_warns(caplog):
     ollama_context_size(100)
     assert "too large for Ollama" in caplog.text
 
-    
+
 def test_unknown_provider_gives_config_error(settings_for):
     with pytest.raises(ConfigError):
         create_chat_model(settings_for("no_such_provider:model"))
