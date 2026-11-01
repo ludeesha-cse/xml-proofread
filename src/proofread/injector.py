@@ -32,10 +32,9 @@ def _make_error(parent: etree._Element, span: ErrorSpan, original: str) -> etree
     tag = f"{{{namespace}}}error" if namespace else "error"
 
     error = parent.makeelement(tag, {"type": span.type, "correction": span.correction})
-    # Extra credit: a short reason for each error. It is collected from the model but not
-    # written by default. To enable it, uncomment the two lines below (see README).
-    # if span.reason:
-    #     error.set("reason", span.reason)
+    # Extra credit: only present when PROOFREAD_REASONS is on (see README).
+    if span.reason:
+        error.set("reason", span.reason)
     error.text = original
     return error
 

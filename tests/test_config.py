@@ -158,6 +158,18 @@ def test_rpm_defaults_to_no_limit(xml_file, monkeypatch):
     assert make_settings(xml_file).requests_per_minute is None
 
 
+def test_reasons_follow_env(xml_file, monkeypatch):
+    monkeypatch.delenv("PROOFREAD_REASONS", raising=False)
+    assert make_settings(xml_file).include_reasons is False
+    monkeypatch.setenv("PROOFREAD_REASONS", "true")
+    assert make_settings(xml_file).include_reasons is True
+    monkeypatch.setenv("PROOFREAD_REASONS", "false")
+    assert make_settings(xml_file).include_reasons is False
+    assert make_settings(xml_file, include_reasons=False).include_reasons is False
+    monkeypatch.setenv("PROOFREAD_REASONS", "false")
+    assert make_settings(xml_file, include_reasons=True).include_reasons is True
+
+
 def test_rpm_from_flag_and_env(xml_file, monkeypatch):
     monkeypatch.setenv("PROOFREAD_RPM", "15")
     assert make_settings(xml_file).requests_per_minute == 15

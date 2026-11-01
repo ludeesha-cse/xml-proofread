@@ -24,10 +24,6 @@ class FoundError(BaseModel):
     )
     type: ErrorType
     correction: str = Field(description="Replacement for exactly the selected tokens.")
-    # Extra credit: ask the model for a short reason. Disabled to keep responses small
-    # and fast. To enable, uncomment this field AND the two lines in
-    # injector._make_error (see README, "Optional: error reasons").
-    # reason: str = Field(description="Why this is an error, in at most 12 words.")
 
 
 class ParagraphErrors(BaseModel):
@@ -43,3 +39,24 @@ class ProofreadResponse(BaseModel):
     """The model's whole answer for one batch of paragraphs."""
 
     paragraphs: list[ParagraphErrors]
+
+
+# Extra credit: ask the model for a short reason per error. Off by default (longer answers
+# are slower and more expensive); turn on with PROOFREAD_REASONS=true (see README).
+class FoundErrorWithReason(FoundError):
+    reason: str = Field(description="Why this is an error, in at most 12 words.")
+
+
+class ParagraphErrorsWithReason(ParagraphErrors):
+    errors: list[FoundErrorWithReason] = Field(
+        default_factory=list, description="Errors in this paragraph. Empty if none."
+    )
+
+
+class ProofreadResponseWithReason(ProofreadResponse):
+    paragraphs: list[ParagraphErrorsWithReason]
+
+
+def response_schema(include_reasons: bool) -> type[ProofreadResponse]:
+    """The schema to ask the model for: with or without a reason per error."""
+    return ProofreadResponseWithReason if include_reasons else ProofreadResponse

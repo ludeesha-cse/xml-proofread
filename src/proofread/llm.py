@@ -17,7 +17,7 @@ from pydantic import ValidationError
 
 from proofread.config import Settings
 from proofread.exceptions import ConfigError
-from proofread.schema import ProofreadResponse
+from proofread.schema import ProofreadResponse, response_schema
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,7 @@ def build_structured_llm(model: BaseChatModel, settings: Settings) -> Runnable:
     with_retry: if the error is one that can go away (see is_retryable), wait a
     little, with growing delays, and try again, up to max_retries extra times.
     """
-    structured = model.with_structured_output(ProofreadResponse, method="json_schema")
+    structured = model.with_structured_output(response_schema(settings.include_reasons), method="json_schema")
     if settings.max_retries == 0:
         return structured
     return structured.with_retry(

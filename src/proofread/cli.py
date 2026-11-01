@@ -88,6 +88,15 @@ def run(
             show_default=False,
         ),
     ] = None,
+    reasons: Annotated[
+        bool | None,
+        typer.Option(
+            "--reasons/--no-reasons",
+            help="Add a short reason to each <error>. Falls back to $PROOFREAD_REASONS; "
+            "default: off.",
+            show_default=False,
+        ),
+    ] = None,
     strict: Annotated[
         bool, typer.Option(help="Fail the run if any paragraph cannot be proofread.")
     ] = False,
@@ -121,6 +130,7 @@ def run(
             timeout_s=timeout,
             strict=strict,
             requests_per_minute=rpm,
+            include_reasons=reasons,
         )
         require_api_key(settings.provider)
 

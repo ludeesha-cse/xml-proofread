@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = "google_genai:gemini-3.6-flash"
 MODEL_ENV_VAR = "PROOFREAD_MODEL"  # lets .env choose the model without a flag
 RPM_ENV_VAR = "PROOFREAD_RPM"
+REASONS_ENV_VAR = "PROOFREAD_REASONS"  # true = ask the model for a reason per error
 
 OUTPUT_SUFFIX = ".corrected.xml"
 
@@ -55,6 +56,7 @@ class Settings:
     timeout_s: float  # seconds before one request gives up
     strict: bool  # does we fail the whole run if any paragraph fails
     requests_per_minute: float | None = None  # client-side rate limit; None = unlimited
+    include_reasons: bool = False  # add reason="..." to each <error> (from .env)
 
     @property
     def model(self) -> str:
@@ -134,6 +136,11 @@ def _float_from_env(name: str) -> float | None:
         raise ConfigError(f"{name}={raw!r} is not a number.") from exc
 
 
+def _bool_from_env(name: str) -> bool:
+    """Read a true/false flag from an environment variable (unset = False)."""
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def build_settings(
     *,  # the "*" forces keyword arguments, so values can't be passed in the wrong order
     input_path: Path,
@@ -146,6 +153,7 @@ def build_settings(
     timeout_s: float,
     strict: bool,
     requests_per_minute: float | None = None,
+    include_reasons: bool | None = None,
 ) -> Settings:
     """Check raw CLI values and return a Settings object, or raise a ProofreadError."""
     # Factory + Fail-Fast validation.
@@ -168,6 +176,8 @@ def build_settings(
     rpm = requests_per_minute if requests_per_minute is not None else _float_from_env(RPM_ENV_VAR)
     if rpm is not None and rpm <= 0:
         raise ConfigError("--rpm must be greater than 0.")
+    if include_reasons is None:  # flag not given: use .env
+        include_reasons = _bool_from_env(REASONS_ENV_VAR)
 
     # 3. Language.
     lang_tag, language_name = normalize_lang(lang)
@@ -193,4 +203,5 @@ def build_settings(
         timeout_s=timeout_s,
         strict=strict,
         requests_per_minute=rpm,
+        include_reasons=include_reasons,
     )

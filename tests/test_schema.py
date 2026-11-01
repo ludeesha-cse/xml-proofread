@@ -44,3 +44,10 @@ def test_schema_lists_all_error_types():
     schema = ProofreadResponse.model_json_schema()
     enum = schema["$defs"]["FoundError"]["properties"]["type"]["enum"]
     assert tuple(enum) == ERROR_TYPES
+
+
+def test_reasons_schema_is_chosen_by_flag():
+    from proofread.schema import ProofreadResponseWithReason, response_schema
+
+    assert response_schema(False) is ProofreadResponse
+    assert response_schema(True) is ProofreadResponseWithReason

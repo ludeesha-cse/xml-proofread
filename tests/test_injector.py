@@ -148,9 +148,14 @@ def test_result_lists_applied_and_rejected():
     assert len(result.rejected) == 1
 
 
-def test_reason_is_not_written_by_default():
+def test_reason_is_written_when_present():
     reasoned = ErrorSpan(0, 1, "grammar", "A", reason="Sentences start with a capital.")
     out, _ = annotate("<r><p>a</p></r>", [reasoned])
+    assert 'reason="Sentences start with a capital."' in out
+
+
+def test_no_reason_attribute_without_a_reason():
+    out, _ = annotate("<r><p>a</p></r>", [ErrorSpan(0, 1, "grammar", "A")])
     assert "reason=" not in out
 
 

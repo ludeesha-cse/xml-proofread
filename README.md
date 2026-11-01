@@ -76,6 +76,7 @@ The output is written next to the input as `INPUT.corrected.xml`.
 | `--rpm` | no limit | Max requests per minute (e.g. `15` for Gemini's free tier); also `PROOFREAD_RPM` |
 | `--max-retries` | `3` | Retries for errors that can go away (timeouts, rate limits, 5xx) |
 | `--timeout` | `60` | Seconds per request |
+| `--reasons` / `--no-reasons` | off | Add a short reason to each error; also `PROOFREAD_REASONS` |
 | `--strict` | off | Fail the run if any paragraph can't be proofread |
 | `--verbose`, `-v` | off | Debug logs |
 
@@ -307,18 +308,8 @@ The tool can add a short explanation to each error:
 <error type="capitalization" correction="John" reason="Proper nouns are capitalized.">john</error>
 ```
 
-It's off by default, because it makes every answer longer (slower and more expensive).
-To turn it on, uncomment two places:
-
-1. `src/proofread/schema.py`, in `FoundError`:
-   ```python
-   reason: str = Field(description="Why this is an error, in at most 12 words.")
-   ```
-2. `src/proofread/injector.py`, in `_make_error`:
-   ```python
-   if span.reason:
-       error.set("reason", span.reason)
-   ```
+It's on by default.
+To turn it off, set `PROOFREAD_REASONS=false` in `.env`.
 
 The reason is already carried through the rest of the pipeline.
 
